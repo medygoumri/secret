@@ -300,6 +300,9 @@ if 'predictions' in locals():
 # ----------------------------
 # Transformer Model Prediction Section
 # ----------------------------
+# ----------------------------
+# Transformer Model Prediction Section
+# ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     # Import custom objects (if your Transformer model uses any custom layers)
     try:
@@ -307,13 +310,12 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
         custom_objects = {
             "transformer_encoder": transformer_encoder,
             "build_transformer_model": build_transformer_model,
-            # Map the loss function "mse" to the built-in MeanSquaredError
             "mse": tf.keras.losses.MeanSquaredError()
         }
     except ImportError:
         custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model with custom_objects and disable compilation for inference
+    # Load the Transformer model (in inference mode, so compilation is disabled)
     transformer_model = tf.keras.models.load_model(
         "models/transformer_gold_model.h5",
         custom_objects=custom_objects,
@@ -322,7 +324,6 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     
     # Load historical gold data from CSV
     transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
-    # Ensure relevant columns are numeric
     cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     transformer_data[cols] = transformer_data[cols].apply(pd.to_numeric, errors='coerce')
     transformer_data.dropna(inplace=True)
@@ -336,21 +337,31 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     # Prepare the input window
     window_data = features_transformer[-window_size:]
     
-    # Load the previously saved scaler
-    scaler_transformer = joblib.load("scaler_transformer.pkl")
-    
-    # Transform the window data using the same scaler as during training
-    window_data = features_transformer[-window_size:]
+    # Convert to a DataFrame with proper column names (for scaler compatibility)
     df_window = pd.DataFrame(window_data, columns=cols)
+    
+    # Load the previously saved scaler (if available)
+    # If not, you can compute one on the fly (not ideal, but a workaround)
+    # scaler_transformer = joblib.load("scaler_transformer.pkl")
+    # For this example, we'll fit a scaler on the available data:
+    from sklearn.preprocessing import StandardScaler
+    scaler_transformer = StandardScaler()
+    scaler_transformer.fit(features_transformer)
+    
+    # Transform the window data using the same scaler
     window_data_scaled = scaler_transformer.transform(df_window)
+    
+    # **Add the batch dimension:**
+    window_data_scaled = window_data_scaled.reshape(1, window_size, len(cols))
     
     # Make prediction using the Transformer model on the scaled data
     transformer_prediction = transformer_model.predict(window_data_scaled)
     predicted_price_transformer = float(transformer_prediction[0][0])
     
-    # Current price from the CSV (Yahoo 'Close' from last row)
+    # Current price from the CSV (Yahoo 'Close' from the last row)
     current_price_transformer = float(features_transformer[-1, 3])
     
     st.subheader("📊 Tomorrow's Prediction (Transformer Model)")
     st.write(f"📌 Current Gold Price (Yahoo): ${current_price_transformer:.2f}")
     st.write(f"📊 Predicted Price (Transformer): ${predicted_price_transformer:.2f}")
+
