@@ -39,7 +39,7 @@ def fetch_gold_api_price() -> float:
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
-        # Debug: Uncomment the following line to see the API response in your app during development
+        # Debug: Uncomment the following line to display the API response
         # st.write("GoldAPI Response:", data)
         return data.get("price")
     else:
@@ -183,6 +183,37 @@ def fetch_news_data() -> dict:
         return response.json()
     return {}
 
+def plot_predicted_trading_chart(predictions: dict) -> go.Figure:
+    """
+    Plot a candlestick chart for tomorrow's predicted prices in a trading platform style.
+    Assumptions:
+      - Predicted Open: current price (from Yahoo Finance)
+      - Predicted Close: predicted price from the model
+      - Predicted High: maximum of current, predicted, and breakpoint prices
+      - Predicted Low: minimum of current, predicted, and breakpoint prices
+    """
+    predicted_open = predictions["current_price"]
+    predicted_close = predictions["predicted_price"]
+    predicted_high = max(predictions["current_price"], predictions["predicted_price"], predictions["breakpoint_price"])
+    predicted_low = min(predictions["current_price"], predictions["predicted_price"], predictions["breakpoint_price"])
+    
+    fig = go.Figure(data=[go.Candlestick(
+        x=[predictions["tomorrow_date"]],
+        open=[predicted_open],
+        high=[predicted_high],
+        low=[predicted_low],
+        close=[predicted_close],
+        increasing_line_color='green',
+        decreasing_line_color='red'
+    )])
+    fig.update_layout(
+        title="Predicted Trading View for Tomorrow",
+        xaxis_title="Date",
+        yaxis_title="Price (USD)",
+        template="plotly_dark"
+    )
+    return fig
+
 # ----------------------------
 # Streamlit App Layout & Sidebar
 # ----------------------------
@@ -247,3 +278,14 @@ if news_data and news_data.get("articles"):
         url = article.get("url", "#")
         sentiment = TextBlob(title).sentiment.polarity
         sentiment_text = "🔴 Negative" if sentiment < -0.1 else "🟢 Positive" if sentiment > 0.1 else "⚪ Neutral"
+        st.markdown(f"[📌 {title}]({url}) - {sentiment_text}")
+else:
+    st.write("No news articles available at the moment.")
+
+# ----------------------------
+# Predicted Trading View Chart
+# ----------------------------
+# Only display the predicted trading chart if predictions exist (i.e. the button was clicked)
+if 'predictions' in locals():
+    st.subheader("📈 Predicted Trading View for Tomorrow")
+    st.plotly_chart(plot_predicted_trading_chart(predictions), use_container_width=True)
