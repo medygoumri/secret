@@ -478,7 +478,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     
     # Try loading the target scaler to inverse-transform the prediction
     try:
-        target_scaler = joblib.load("scaler_target.pkl")
+        target_scaler = joblib.load("scaler_transformer.pkl")
         st.write("Loaded saved target scaler.")
         predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
     except Exception as e:
