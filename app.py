@@ -334,8 +334,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     window_data = features_transformer[-window_size:]
     df_window = pd.DataFrame(window_data, columns=cols)
     
-    # Load the scaler that was saved during training (if available)
-    # Otherwise, fit one on the available data (less ideal)
+    # Load the scaler (if saved during training) or fit a new one on the data
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
     except Exception as e:
@@ -347,15 +346,11 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     # Convert df_window to a NumPy array to avoid feature name warnings
     window_data_scaled = scaler_transformer.transform(df_window.values)
     
-    # Debug: Check if any NaN values exist
-    if np.isnan(window_data_scaled).any():
-        st.error("NaN values found in scaled input data.")
-        st.stop()
-    
-    # Add batch dimension
+    # Add batch dimension: reshape to (1, window_size, num_features)
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(cols))
     
-    st.write("Scaled Window Data:", window_data_scaled)
+    # For debugging, display the scaled window data in 2D (removing the batch dimension)
+    st.write("Scaled Window Data:", window_data_scaled.squeeze(0))
     
     transformer_prediction = transformer_model.predict(window_data_scaled)
     predicted_price_transformer = float(transformer_prediction[0][0])
