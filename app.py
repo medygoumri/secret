@@ -416,31 +416,36 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     except ImportError:
         custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model for inference
+    # Load the Transformer model for inference (compile=False)
     transformer_model = tf.keras.models.load_model(
         "models/transformer_gold_model.h5",
         custom_objects=custom_objects,
         compile=False
     )
     
-    # Fetch live daily data using yfinance (for example, last 7 days)
+    # Fetch live daily data using yfinance (e.g., last 7 days)
     live_data = yf.download("GC=F", period="7d", interval="1d")
     if live_data.empty:
         st.error("Failed to fetch live data from Yahoo Finance.")
         st.stop()
     
-    # Ensure the required columns exist
-    cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-    if not set(cols).issubset(live_data.columns):
-        st.error("Live data does not contain required columns.")
-        st.stop()
+    st.write("Live data columns:", live_data.columns.tolist())
     
-    # Clean and convert data
-    live_data = live_data[cols]
+    # Define the required columns for our model
+    required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+    
+    # If any required column is missing, handle it.
+    for col in required_cols:
+        if col not in live_data.columns:
+            st.warning(f"Column '{col}' not found in live data. Filling with default value (0).")
+            live_data[col] = 0.0  # or an alternative default value
+    
+    # Select only the required columns
+    live_data = live_data[required_cols]
     live_data = live_data.apply(pd.to_numeric, errors='coerce')
     live_data.dropna(inplace=True)
     
-    # Convert to NumPy array
+    # Convert to NumPy array for further processing
     features_live = live_data.values.astype(np.float32)
     
     window_size = 30  # Adjust as needed – ensure you have enough live data
@@ -450,7 +455,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     
     # Prepare the input window (last 30 days)
     window_data = features_live[-window_size:]
-    df_window = pd.DataFrame(window_data, columns=cols)
+    df_window = pd.DataFrame(window_data, columns=required_cols)
     
     # Load or fit the input scaler (ideally, use the scaler from training)
     try:
@@ -462,28 +467,27 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
         scaler_transformer = StandardScaler()
         scaler_transformer.fit(features_live)
     
-    # Transform the window data (pass DataFrame values so feature names aren't needed)
+    # Transform the window data
     window_data_scaled = scaler_transformer.transform(df_window.values)
-    window_data_scaled = window_data_scaled.reshape(1, window_size, len(cols))
+    window_data_scaled = window_data_scaled.reshape(1, window_size, len(required_cols))
     
     # Make prediction using the Transformer model
     transformer_prediction = transformer_model.predict(window_data_scaled)
     raw_pred = transformer_prediction[0][0]
     
-    # Inverse transform if a target scaler is available
+    # Load the target scaler (if available) to inverse-transform the prediction
     try:
         target_scaler = joblib.load("scaler_target.pkl")
-        predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
         st.write("Loaded saved target scaler.")
+        predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
     except Exception as e:
         st.warning("Target scaler not found or error in inverse transforming. Using raw model output.")
         predicted_price_transformer = float(raw_pred)
     
-    # Get the current price from the live data (Yahoo 'Close' of the last day)
+    # Get the current price from live data (last day's "Close")
     current_price_transformer = float(features_live[-1, 3])
     
     st.subheader("📊 Transformer Model Prediction (Daily Live Data)")
     st.write(f"📌 Current Gold Price (Yahoo Live): ${current_price_transformer:.2f}")
     st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
-
 
