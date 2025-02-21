@@ -92,7 +92,6 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
     final_input = np.hstack((latest_features_scaled, lstm_prediction.reshape(1, -1)))
     xgb_prediction = xgb_model.predict(final_input)
 
-    # Calculate predicted price change using a dynamic 2% factor
     predicted_price_change = float(lstm_prediction[0][0] * (current_price * 0.02))
     predicted_price = float(
         current_price + (predicted_price_change if xgb_prediction[0] == 1 else -predicted_price_change)
@@ -101,8 +100,7 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
         current_price * 1.01 if xgb_prediction[0] == 1 else current_price * 0.99
     )
 
-    # Adjusted prices using the difference between Yahoo and GoldAPI prices
-    adjusted_current_price = current_price - diff  # equals GoldAPI price
+    adjusted_current_price = current_price - diff
     adjusted_predicted_price = predicted_price - diff
     adjusted_breakpoint_price = breakpoint_price - diff
 
@@ -120,7 +118,6 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
     }
 
 def plot_price_movement(predictions: dict) -> go.Figure:
-    """Create an interactive Plotly line chart to compare normal and adjusted predictions."""
     categories = ["Current Price", "Breakpoint", "Predicted Price"]
     normal_prices = [predictions["current_price"], predictions["breakpoint_price"], predictions["predicted_price"]]
     adjusted_prices = [
@@ -129,32 +126,18 @@ def plot_price_movement(predictions: dict) -> go.Figure:
         predictions["adjusted_predicted_price"]
     ]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=categories,
-        y=normal_prices,
-        mode='lines+markers',
-        name='Normal Prediction',
-        line=dict(dash='dash', color='blue'),
-        marker=dict(color='blue')
-    ))
-    fig.add_trace(go.Scatter(
-        x=categories,
-        y=adjusted_prices,
-        mode='lines+markers',
-        name='Adjusted Prediction (GoldAPI Diff)',
-        line=dict(dash='dash', color='red'),
-        marker=dict(color='red')
-    ))
-    fig.update_layout(
-        title="Predicted Gold Price Movement",
-        xaxis_title="Price Movement Stages",
-        yaxis_title="Gold Price (USD)",
-        template="plotly_white"
-    )
+    fig.add_trace(go.Scatter(x=categories, y=normal_prices, mode='lines+markers', name='Normal Prediction',
+                             line=dict(dash='dash', color='blue'), marker=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=categories, y=adjusted_prices, mode='lines+markers',
+                             name='Adjusted Prediction (GoldAPI Diff)',
+                             line=dict(dash='dash', color='red'), marker=dict(color='red')))
+    fig.update_layout(title="Predicted Gold Price Movement",
+                      xaxis_title="Price Movement Stages",
+                      yaxis_title="Gold Price (USD)",
+                      template="plotly_white")
     return fig
 
 def plot_candlestick_chart(gold_data: pd.DataFrame) -> go.Figure:
-    """Create an interactive candlestick chart for historical gold prices."""
     fig = go.Figure(data=[go.Candlestick(
         x=gold_data.index,
         open=gold_data['Open'],
@@ -163,17 +146,14 @@ def plot_candlestick_chart(gold_data: pd.DataFrame) -> go.Figure:
         close=gold_data['Close'],
         name="Gold Price"
     )])
-    fig.update_layout(
-        title="Historical Gold Prices",
-        xaxis_title="Date",
-        yaxis_title="Price (USD)",
-        template="plotly_white"
-    )
+    fig.update_layout(title="Historical Gold Prices",
+                      xaxis_title="Date",
+                      yaxis_title="Price (USD)",
+                      template="plotly_white")
     return fig
 
 @st.cache_data
 def fetch_news_data() -> dict:
-    """Fetch the latest gold market news using NewsAPI."""
     news_api_url = ("https://newsapi.org/v2/everything?q=gold+price&"
                     "sortBy=publishedAt&apiKey=93f93957d19546dc872e4c8bcd05763e")
     response = requests.get(news_api_url)
@@ -182,9 +162,6 @@ def fetch_news_data() -> dict:
     return {}
 
 def plot_predicted_trading_chart(predictions: dict) -> go.Figure:
-    """
-    Plot a candlestick chart for tomorrow's predicted prices in a trading platform style.
-    """
     predicted_open = predictions["current_price"]
     predicted_close = predictions["predicted_price"]
     predicted_high = max(predictions["current_price"], predictions["predicted_price"], predictions["breakpoint_price"])
@@ -199,12 +176,10 @@ def plot_predicted_trading_chart(predictions: dict) -> go.Figure:
         increasing_line_color='green',
         decreasing_line_color='red'
     )])
-    fig.update_layout(
-        title="Predicted Trading View for Tomorrow",
-        xaxis_title="Date",
-        yaxis_title="Price (USD)",
-        template="plotly_dark"
-    )
+    fig.update_layout(title="Predicted Trading View for Tomorrow",
+                      xaxis_title="Date",
+                      yaxis_title="Price (USD)",
+                      template="plotly_dark")
     return fig
 
 # ----------------------------
@@ -212,25 +187,20 @@ def plot_predicted_trading_chart(predictions: dict) -> go.Figure:
 # ----------------------------
 st.set_page_config(page_title="Gold Price Prediction", layout="wide")
 st.title("📈 Gold Price Prediction Dashboard")
-
-# Sidebar settings
 st.sidebar.title("Settings")
 historical_days = st.sidebar.slider("Select Historical Days for Data", min_value=7, max_value=90, value=30)
 
-# Fetch data for predictions and historical display
 with st.spinner("Fetching latest gold data for predictions..."):
     gold_data_prediction = fetch_gold_data(period="7d", interval="1d")
 with st.spinner("Fetching historical gold data..."):
     gold_data_history = fetch_gold_data(period=f"{historical_days}d", interval="1d")
-    # Optionally, add technical indicators for display purposes
     gold_data_history_indicators = add_technical_indicators(gold_data_history.copy())
 
 # ----------------------------
-# Main Prediction and Visualization Section (LSTM + XGBoost)
+# Main Prediction (LSTM/XGBoost)
 # ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (LSTM/XGBoost)", key="predict_lstm"):
     predictions = predict_tomorrow_price(gold_data_prediction)
-
     st.subheader("📊 Tomorrow's Prediction (LSTM/XGBoost)")
     st.write(f"📅 **Today's Date:** {predictions['today_date']}")
     st.write(f"📅 **Latest Available Data:** {predictions['latest_available_date']}")
@@ -250,7 +220,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (LSTM/XGBoost)", key="predict_l
     st.plotly_chart(plot_price_movement(predictions), use_container_width=True)
 
 # ----------------------------
-# Historical Data Visualization & Table
+# Historical Data Visualization
 # ----------------------------
 st.subheader(f"📜 Historical Gold Prices (Last {historical_days} Days)")
 st.dataframe(gold_data_history[['Close']].tail(30))
@@ -272,7 +242,7 @@ else:
     st.write("No news articles available at the moment.")
 
 # ----------------------------
-# Predicted Trading View Chart & Details (LSTM/XGBoost)
+# Predicted Trading View Chart (LSTM/XGBoost)
 # ----------------------------
 if 'predictions' in locals():
     st.subheader("📈 Predicted Trading View for Tomorrow (LSTM/XGBoost)")
@@ -316,7 +286,6 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="pred
         st.error("No live data available from Yahoo Finance.")
         st.stop()
     
-    # Select required columns and drop any rows with missing data
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     transformer_data = transformer_data[required_cols]
     transformer_data.dropna(inplace=True)
@@ -327,11 +296,9 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="pred
         st.error(f"Not enough data to perform transformer prediction. Data available: {len(features_transformer)} days.")
         st.stop()
     
-    # Prepare the input window (last 30 days)
     window_data = features_transformer[-window_size:]
     df_window = pd.DataFrame(window_data, columns=required_cols)
     
-    # Load (or fit) the input scaler for the transformer model
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
         st.write("Loaded saved input scaler.")
@@ -344,10 +311,9 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="pred
     window_data_scaled = scaler_transformer.transform(df_window.values)
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(required_cols))
     
-    # Make prediction using the Transformer model on the scaled live data
     transformer_prediction = transformer_model.predict(window_data_scaled)
-    # Assume the model outputs 4 values: [predicted_open, predicted_high, predicted_low, predicted_close]
-    raw_pred = transformer_prediction[0]  # shape: (4,)
+    # Expecting a 4-element output: [predicted_open, predicted_high, predicted_low, predicted_close]
+    raw_pred = transformer_prediction[0]  # raw_pred.shape should be (4,)
     
     try:
         target_scaler = joblib.load("scaler_target.pkl")
@@ -357,7 +323,13 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="pred
         st.warning("Target scaler not found or error in inverse transforming. Using raw model output.")
         predicted_prices = raw_pred
     
-    predicted_open, predicted_high, predicted_low, predicted_close = predicted_prices
+    # Unpack the predicted prices
+    if predicted_prices.shape[0] == 4:
+        predicted_open, predicted_high, predicted_low, predicted_close = predicted_prices
+    else:
+        st.error("Model output does not contain 4 predicted values.")
+        st.stop()
+    
     current_price_transformer = float(features_transformer[-1, 3])
     
     st.subheader("📊 Transformer Model Prediction (Daily Live Data)")
