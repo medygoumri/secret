@@ -3,6 +3,7 @@ import yfinance as yf
 import joblib
 import numpy as np
 import tensorflow as tf
+import datetime
 import matplotlib.pyplot as plt
 
 # Load models
@@ -10,26 +11,36 @@ lstm_model = tf.keras.models.load_model("lstm_gold_model.h5")
 xgb_model = joblib.load("xgb_gold_model.pkl")
 scaler = joblib.load("scaler.pkl")
 
+# Get today's date dynamically
+today_date = datetime.datetime.today().strftime('%Y-%m-%d')
+
 # Streamlit Title
 st.title("📈 Gold Price Prediction (XAU/USD)")
 
 # Button to Predict
 if st.button("🔮 Predict Gold Price for Tomorrow"):
 
-    # Fetch latest Gold price
-    gold_latest = yf.download("GC=F", period="5d", interval="1d")
-    
-    if gold_latest.empty:
+    # Fetch the latest gold price (ensures updated data)
+    gold_data = yf.download("GC=F", period="7d", interval="1d")  # Get last 7 days for safety
+
+    if gold_data.empty:
         st.error("Error: No data received for gold prices. Try again later.")
     else:
-        gold_latest = gold_latest.tail(1)  # Get latest available price
+        # Extract the latest available price (last row)
+        gold_latest = gold_data.tail(1)
 
-        # Extract current price and ensure it's properly defined
+        # Extract latest available date dynamically
+        latest_available_date = gold_latest.index[-1].strftime('%Y-%m-%d')
+
+        # Extract and convert current price to float BEFORE using it
         if 'Close' in gold_latest.columns:
-            current_price = float(gold_latest['Close'].values[0])  # Convert to float
+            current_price = float(gold_latest['Close'].values[0])  # Convert NumPy array to float
         else:
             st.error("Error: 'Close' price data is missing in the dataset.")
             st.stop()
+
+        # Get tomorrow's date dynamically
+        tomorrow_date = (datetime.datetime.strptime(latest_available_date, '%Y-%m-%d') + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
 
         # Preprocess latest data
         latest_features = gold_latest[['Open', 'High', 'Low', 'Close', 'Volume']].values
@@ -47,14 +58,18 @@ if st.button("🔮 Predict Gold Price for Tomorrow"):
         # Predict movement with XGBoost
         xgb_prediction = xgb_model.predict(final_input)
 
-        # Define predicted price change
+        # Define predicted price change (convert to float)
         predicted_price_change = float(lstm_prediction[0][0] * (current_price * 0.02))  # Assuming 2% fluctuation
         predicted_price = float(current_price + (predicted_price_change if xgb_prediction[0] == 1 else -predicted_price_change))
 
-        # Define breakpoint price
+        # Define breakpoint price (convert to float)
         breakpoint_price = float(current_price * 1.01 if xgb_prediction[0] == 1 else current_price * 0.99)
 
-        # Display predictions
+        # Display Predictions
+        st.write(f"📅 **Today's Date:** {today_date}")
+        st.write(f"📅 **Latest Available Data:** {latest_available_date}")
+        st.write(f"🔮 **Prediction for:** {tomorrow_date}")
+        
         st.write(f"📌 **Current Gold Price:** **${current_price:.2f}**")
         st.write(f"📊 **Predicted Gold Price for Tomorrow:** **${predicted_price:.2f}**")
         st.write(f"🔴 **Breakpoint Price:** **${breakpoint_price:.2f}**")
