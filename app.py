@@ -407,6 +407,9 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
 # ----------------------------
 # Transformer Model Prediction Section (Daily Live Data)
 # ----------------------------
+# ----------------------------
+# Transformer Model Prediction Section (Daily Live Data)
+# ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)"):
     # Load custom objects (if your Transformer model uses any custom layers)
     try:
@@ -426,11 +429,15 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
         compile=False
     )
     
-    # Fetch live daily data using yfinance (increasing period to 60d to ensure sufficient data)
+    # Fetch live daily data using yfinance with an increased period.
     live_data = yf.download("GC=F", period="60d", interval="1d")
     if live_data.empty:
         st.error("Failed to fetch live data from Yahoo Finance.")
         st.stop()
+    
+    # If the DataFrame has MultiIndex columns, flatten them
+    if isinstance(live_data.columns, pd.MultiIndex):
+        live_data.columns = live_data.columns.get_level_values(0)
     
     st.write("Live data columns:", live_data.columns.tolist())
     
@@ -440,7 +447,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
         if col not in live_data.columns:
             st.warning(f"Column '{col}' not found in live data. Filling with default value (0.0).")
             live_data[col] = 0.0
-    
+
     # Select and clean the required columns
     live_data = live_data[required_cols]
     live_data = live_data.apply(pd.to_numeric, errors='coerce')
@@ -458,32 +465,24 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     window_data = features_live[-window_size:]
     df_window = pd.DataFrame(window_data, columns=required_cols)
     
-    # Load or fit the input scaler (ideally, use the scaler from training)
+    # Load or fit the input scaler (ideally, the one used during training)
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
         st.write("Loaded saved input scaler.")
     except Exception as e:
-        st.warning("Input scaler not found. Fitting scaler on live data (may differ from training).")
+        st.warning("Input scaler not found. Fitting scaler on live data (this may differ from training).")
         from sklearn.preprocessing import StandardScaler
         scaler_transformer = StandardScaler()
         scaler_transformer.fit(features_live)
     
-    # Transform the window data and add batch dimension
+    # Transform the window data and add the batch dimension
     window_data_scaled = scaler_transformer.transform(df_window.values)
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(required_cols))
     
     # Make prediction using the Transformer model on the scaled data
     transformer_prediction = transformer_model.predict(window_data_scaled)
-    raw_pred = transformer_prediction[0][0]  # ensure raw_pred is computed
-    
-    # Try loading the target scaler to inverse-transform the prediction
-    try:
-        target_scaler = joblib.load("scaler_transformer.pkl")
-        st.write("Loaded saved target scaler.")
-        predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
-    except Exception as e:
-        st.warning("Target scaler not found or error in inverse transforming. Using raw model output.")
-        predicted_price_transformer = float(raw_pred)
+    # Use the raw output directly (since target scaler is not available or working)
+    predicted_price_transformer = float(transformer_prediction[0][0])
     
     # Get the current price from live data (Yahoo 'Close' of the last day)
     current_price_transformer = float(features_live[-1, 3])
@@ -491,5 +490,6 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     st.subheader("📊 Transformer Model Prediction (Daily Live Data)")
     st.write(f"📌 Current Gold Price (Yahoo Live): ${current_price_transformer:.2f}")
     st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
+
 
 
