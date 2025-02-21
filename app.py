@@ -307,16 +307,26 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
         custom_objects = {
             "transformer_encoder": transformer_encoder,
             "build_transformer_model": build_transformer_model,
+            # Map the loss function "mse" to the built-in MeanSquaredError
+            "mse": tf.keras.losses.MeanSquaredError()
         }
     except ImportError:
-        custom_objects = {}
+        # If no custom objects are defined, still provide the mse loss function
+        custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model with custom_objects if needed
-    transformer_model = tf.keras.models.load_model("models/transformer_gold_model.h5", custom_objects=custom_objects)
+    # Load the Transformer model with custom_objects and disable compilation (if you're only predicting)
+    transformer_model = tf.keras.models.load_model(
+        "models/transformer_gold_model.h5",
+        custom_objects=custom_objects,
+        compile=False
+    )
     
     # Load historical gold data from CSV
     transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
-    transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']] = transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']].apply(pd.to_numeric, errors='coerce')
+    # Ensure relevant columns are numeric
+    transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']] = transformer_data[
+        ['Open', 'High', 'Low', 'Close', 'Volume']
+    ].apply(pd.to_numeric, errors='coerce')
     features_transformer = transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']].values.astype(np.float32)
     
     window_size = 30  # Use the last 30 days for prediction
