@@ -95,11 +95,22 @@ if st.button("🔮 Predict Tomorrow's Gold Price"):
         # **Visualization: Normal Price Graph**
         fig, ax = plt.subplots(figsize=(8, 5))
 
+        # Normal Prediction
         ax.plot(["Current Price", "Breakpoint", "Predicted Price"],
                 [current_price, breakpoint_price, predicted_price], marker='o', linestyle='dashed', color='b', label="Normal Prediction")
 
+        # Adjusted Prediction (-20)
         ax.plot(["Current Price", "Breakpoint", "Predicted Price"],
                 [adjusted_current_price, adjusted_breakpoint_price, adjusted_predicted_price], marker='o', linestyle='dashed', color='r', label="Adjusted Prediction (-20)")
+
+        # Annotate points with prices
+        ax.text(0, current_price, f"${current_price:.2f}", ha='center', fontsize=12, fontweight='bold', color='blue')
+        ax.text(1, breakpoint_price, f"${breakpoint_price:.2f}", ha='center', fontsize=12, fontweight='bold', color='blue')
+        ax.text(2, predicted_price, f"${predicted_price:.2f}", ha='center', fontsize=12, fontweight='bold', color='blue')
+
+        ax.text(0, adjusted_current_price, f"${adjusted_current_price:.2f}", ha='center', fontsize=12, fontweight='bold', color='red')
+        ax.text(1, adjusted_breakpoint_price, f"${adjusted_breakpoint_price:.2f}", ha='center', fontsize=12, fontweight='bold', color='red')
+        ax.text(2, adjusted_predicted_price, f"${adjusted_predicted_price:.2f}", ha='center', fontsize=12, fontweight='bold', color='red')
 
         ax.set_xlabel("Price Movement Stages")
         ax.set_ylabel("Gold Price (USD)")
