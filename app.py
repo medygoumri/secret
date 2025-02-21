@@ -185,11 +185,6 @@ def fetch_news_data() -> dict:
 def plot_predicted_trading_chart(predictions: dict) -> go.Figure:
     """
     Plot a candlestick chart for tomorrow's predicted prices in a trading platform style.
-    Assumptions:
-      - Predicted Open: current price (from Yahoo Finance)
-      - Predicted Close: predicted price from the model
-      - Predicted High: maximum of current, predicted, and breakpoint prices
-      - Predicted Low: minimum of current, predicted, and breakpoint prices
     """
     predicted_open = predictions["current_price"]
     predicted_close = predictions["predicted_price"]
@@ -234,10 +229,9 @@ with st.spinner("Fetching historical gold data..."):
 # ----------------------------
 # Main Prediction and Visualization Section (LSTM + XGBoost)
 # ----------------------------
-if st.button("🔮 Predict Tomorrow's Gold Price"):
+if st.button("🔮 Predict Tomorrow's Gold Price (LSTM/XGBoost)", key="predict_lstm"):
     predictions = predict_tomorrow_price(gold_data_prediction)
 
-    # Display basic information and metrics
     st.subheader("📊 Tomorrow's Prediction (LSTM/XGBoost)")
     st.write(f"📅 **Today's Date:** {predictions['today_date']}")
     st.write(f"📅 **Latest Available Data:** {predictions['latest_available_date']}")
@@ -279,7 +273,7 @@ else:
     st.write("No news articles available at the moment.")
 
 # ----------------------------
-# Predicted Trading View Chart & Details
+# Predicted Trading View Chart & Details (LSTM/XGBoost)
 # ----------------------------
 if 'predictions' in locals():
     st.subheader("📈 Predicted Trading View for Tomorrow (LSTM/XGBoost)")
@@ -298,126 +292,9 @@ if 'predictions' in locals():
     st.write(f"**Predicted Close:** ${predicted_close:.2f}")
 
 # ----------------------------
-# Transformer Model Prediction Section
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section (Tomorrow Prediction)
-# ----------------------------
-if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
-    # Load custom objects (if your Transformer model uses any custom layers)
-    try:
-        from models.transformer_model import transformer_encoder, build_transformer_model
-        custom_objects = {
-            "transformer_encoder": transformer_encoder,
-            "build_transformer_model": build_transformer_model,
-            "mse": tf.keras.losses.MeanSquaredError()
-        }
-    except ImportError:
-        custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
-    
-    # Load the Transformer model for inference (compile=False)
-    transformer_model = tf.keras.models.load_model(
-        "models/transformer_gold_model.h5",
-        custom_objects=custom_objects,
-        compile=False
-    )
-    
-    # Load historical gold data from CSV (daily data)
-    transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
-    cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-    transformer_data[cols] = transformer_data[cols].apply(pd.to_numeric, errors='coerce')
-    transformer_data.dropna(inplace=True)
-    features_transformer = transformer_data[cols].values.astype(np.float32)
-    
-    window_size = 30  # Use the last 30 days for prediction
-    if len(features_transformer) < window_size:
-        st.error("Not enough data to perform transformer prediction.")
-        st.stop()
-    
-    # Prepare the input window (last 30 days)
-    window_data = features_transformer[-window_size:]
-    df_window = pd.DataFrame(window_data, columns=cols)
-    
-    # Load the scaler used during training for input features.
-    # (If not available, fit one on the available features—but this may not match training exactly.)
-    try:
-        scaler_transformer = joblib.load("scaler_transformer.pkl")
-        st.write("Loaded saved input scaler.")
-    except Exception as e:
-        st.warning("Input scaler not found. Fitting scaler on current data (may differ from training).")
-        from sklearn.preprocessing import StandardScaler
-        scaler_transformer = StandardScaler()
-        scaler_transformer.fit(features_transformer)
-    
-    # Transform the window data (pass a DataFrame to preserve feature names)
-    window_data_scaled = scaler_transformer.transform(df_window.values)
-    
-    # Add batch dimension: shape becomes (1, window_size, num_features)
-    window_data_scaled = window_data_scaled.reshape(1, window_size, len(cols))
-    
-    # Make prediction using the Transformer model on the scaled data
-    transformer_prediction = transformer_model.predict(window_data_scaled)
-    raw_pred = transformer_prediction[0][0]
-    
-    # Now load the target scaler (used to scale the 'Close' during training) so we can invert the scaling.
-    try:
-        target_scaler = joblib.load("scaler_target.pkl")
-        st.write("Loaded saved target scaler.")
-    except Exception as e:
-        st.warning("Target scaler not found. Fitting target scaler on current 'Close' values (may differ from training).")
-        from sklearn.preprocessing import StandardScaler
-        target_scaler = StandardScaler()
-        target_scaler.fit(transformer_data[['Close']])
-    
-    # Inverse transform the raw prediction to get the actual price.
-    # Note: target_scaler expects a 2D array.
-    predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
-    
-    # Get the current gold price from the CSV (Yahoo 'Close' from last row)
-    current_price_transformer = float(features_transformer[-1, 3])
-    
-    st.subheader("📊 Transformer Model Prediction (Daily)")
-    st.write(f"📌 Current Gold Price (Yahoo): ${current_price_transformer:.2f}")
-    st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
-
-# ----------------------------
-# Transformer Model Next Hour Prediction Section (Hourly Data)
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section (Daily)
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section (Daily Live Data)
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section (Daily Live Data)
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section (Daily Live Data)
-# ----------------------------
-# ----------------------------
-# Transformer Model Prediction Section (Daily Live Data)
-# ----------------------------
-# ----------------------------
 # Transformer Model Prediction Section (Daily Data)
 # ----------------------------
-if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
-    # Load custom objects (if your Transformer model uses any custom layers)
+if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="predict_transformer"):
     try:
         from models.transformer_model import transformer_encoder, build_transformer_model
         custom_objects = {
@@ -428,30 +305,26 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     except ImportError:
         custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model for inference (without compiling)
     transformer_model = tf.keras.models.load_model(
         "models/transformer_gold_model.h5",
         custom_objects=custom_objects,
         compile=False
     )
     
-    # Load historical gold data from CSV
     transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     transformer_data[required_cols] = transformer_data[required_cols].apply(pd.to_numeric, errors='coerce')
     transformer_data.dropna(inplace=True)
     features_transformer = transformer_data[required_cols].values.astype(np.float32)
     
-    window_size = 30  # Use the last 30 days for prediction
+    window_size = 30
     if len(features_transformer) < window_size:
         st.error(f"Not enough data to perform transformer prediction. Data available: {len(features_transformer)} days.")
         st.stop()
     
-    # Prepare the input window (last 30 days)
     window_data = features_transformer[-window_size:]
     df_window = pd.DataFrame(window_data, columns=required_cols)
     
-    # Load or fit the input scaler (ideally, use the scaler from training)
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
         st.write("Loaded saved input scaler.")
@@ -461,15 +334,12 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
         scaler_transformer = StandardScaler()
         scaler_transformer.fit(features_transformer)
     
-    # Transform the window data and add batch dimension
     window_data_scaled = scaler_transformer.transform(df_window.values)
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(required_cols))
     
-    # Make prediction using the Transformer model on the scaled data
     transformer_prediction = transformer_model.predict(window_data_scaled)
     raw_pred = transformer_prediction[0][0]
     
-    # Load the target scaler to inverse-transform the prediction
     try:
         target_scaler = joblib.load("scaler_target.pkl")
         st.write("Loaded saved target scaler.")
@@ -478,13 +348,8 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
         st.warning("Target scaler not found or error in inverse transforming. Using raw model output.")
         predicted_price_transformer = float(raw_pred)
     
-    # Get the current price from the CSV (Yahoo 'Close' from the last row)
     current_price_transformer = float(features_transformer[-1, 3])
     
     st.subheader("📊 Transformer Model Prediction (Daily Data)")
     st.write(f"📌 Current Gold Price (Yahoo): ${current_price_transformer:.2f}")
     st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
-
-
-
-
