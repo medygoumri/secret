@@ -292,7 +292,7 @@ if 'predictions' in locals():
     st.write(f"**Predicted Close:** ${predicted_close:.2f}")
 
 # ----------------------------
-# Transformer Model Prediction Section (Daily Data)
+# Transformer Model Prediction Section (Daily Live Data)
 # ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="predict_transformer"):
     try:
@@ -311,25 +311,33 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="pred
         compile=False
     )
     
-    transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
+    # Fetch live data from Yahoo Finance for a longer period (e.g., 100 days)
+    transformer_data = yf.download("GC=F", period="100d", interval="1d")
+    if transformer_data.empty:
+        st.error("No live data available from Yahoo Finance.")
+        st.stop()
+    
+    # Select required columns and drop any rows with missing data
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-    transformer_data[required_cols] = transformer_data[required_cols].apply(pd.to_numeric, errors='coerce')
+    transformer_data = transformer_data[required_cols]
     transformer_data.dropna(inplace=True)
-    features_transformer = transformer_data[required_cols].values.astype(np.float32)
+    features_transformer = transformer_data.values.astype(np.float32)
     
     window_size = 30
     if len(features_transformer) < window_size:
         st.error(f"Not enough data to perform transformer prediction. Data available: {len(features_transformer)} days.")
         st.stop()
     
+    # Prepare the input window (last 30 days)
     window_data = features_transformer[-window_size:]
     df_window = pd.DataFrame(window_data, columns=required_cols)
     
+    # Load (or fit) the input scaler for the transformer model
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
         st.write("Loaded saved input scaler.")
     except Exception as e:
-        st.warning("Saved input scaler not found. Fitting scaler on current data (this may differ from training).")
+        st.warning("Saved input scaler not found. Fitting scaler on current live data (this may differ from training).")
         from sklearn.preprocessing import StandardScaler
         scaler_transformer = StandardScaler()
         scaler_transformer.fit(features_transformer)
@@ -337,6 +345,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="pred
     window_data_scaled = scaler_transformer.transform(df_window.values)
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(required_cols))
     
+    # Make prediction using the Transformer model on the scaled live data
     transformer_prediction = transformer_model.predict(window_data_scaled)
     raw_pred = transformer_prediction[0][0]
     
@@ -348,8 +357,9 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="pred
         st.warning("Target scaler not found or error in inverse transforming. Using raw model output.")
         predicted_price_transformer = float(raw_pred)
     
+    # Current live price from Yahoo Finance ('Close' of the last day)
     current_price_transformer = float(features_transformer[-1, 3])
     
-    st.subheader("📊 Transformer Model Prediction (Daily Data)")
-    st.write(f"📌 Current Gold Price (Yahoo): ${current_price_transformer:.2f}")
+    st.subheader("📊 Transformer Model Prediction (Daily Live Data)")
+    st.write(f"📌 Current Gold Price (Yahoo Live): ${current_price_transformer:.2f}")
     st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
