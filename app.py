@@ -283,9 +283,21 @@ else:
     st.write("No news articles available at the moment.")
 
 # ----------------------------
-# Predicted Trading View Chart
+# Predicted Trading View Chart & Details
 # ----------------------------
-# Only display the predicted trading chart if predictions exist (i.e. the button was clicked)
 if 'predictions' in locals():
     st.subheader("📈 Predicted Trading View for Tomorrow")
-    st.plotly_chart(plot_predicted_trading_chart(predictions), use_container_width=True)
+    trading_chart = plot_predicted_trading_chart(predictions)
+    st.plotly_chart(trading_chart, use_container_width=True)
+    
+    # Calculate predicted values for display
+    predicted_open = predictions["current_price"]
+    predicted_close = predictions["predicted_price"]
+    predicted_high = max(predictions["current_price"], predictions["predicted_price"], predictions["breakpoint_price"])
+    predicted_low = min(predictions["current_price"], predictions["predicted_price"], predictions["breakpoint_price"])
+    
+    st.markdown("### Predicted Prices Details")
+    st.write(f"**Predicted Open:** ${predicted_open:.2f}")
+    st.write(f"**Predicted High:** ${predicted_high:.2f}")
+    st.write(f"**Predicted Low:** ${predicted_low:.2f}")
+    st.write(f"**Predicted Close:** ${predicted_close:.2f}")
