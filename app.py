@@ -474,7 +474,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     
     # Make prediction using the Transformer model
     transformer_prediction = transformer_model.predict(window_data_scaled)
-    raw_pred = transformer_prediction[0][0]
+    predicted_price_transformer = float(transformer_prediction[0][0])
     
     # Load the target scaler (if available) to inverse-transform the prediction
     try:
