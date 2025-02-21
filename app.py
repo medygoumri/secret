@@ -309,6 +309,9 @@ if 'predictions' in locals():
 # ----------------------------
 # Transformer Model Prediction Section
 # ----------------------------
+# ----------------------------
+# Transformer Model Prediction Section
+# ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     # Load custom objects (if your Transformer model uses any custom layers)
     try:
@@ -321,7 +324,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     except ImportError:
         custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model (in inference mode, compile is disabled)
+    # Load the Transformer model (for inference)
     transformer_model = tf.keras.models.load_model(
         "models/transformer_gold_model.h5",
         custom_objects=custom_objects,
@@ -342,38 +345,48 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     
     # Prepare the input window (last 30 days)
     window_data = features_transformer[-window_size:]
-    
-    # Create a DataFrame with proper column names so that the scaler receives valid feature names
     df_window = pd.DataFrame(window_data, columns=cols)
     
-    # Load the previously saved scaler if available; otherwise, fit one on current data
+    # Try loading the scaler used during training.
+    # If not available, fit a new scaler (note: this might not match training exactly).
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
+        st.write("Loaded saved scaler.")
     except Exception as e:
         st.warning("Saved scaler not found. Fitting scaler on current data (this may differ from training).")
         from sklearn.preprocessing import StandardScaler
         scaler_transformer = StandardScaler()
         scaler_transformer.fit(features_transformer)
     
-    # IMPORTANT: Pass the DataFrame (with column names) to transform
-    window_data_scaled = scaler_transformer.transform(df_window)
+    # Transform the window data.
+    # Use df_window.values to ensure the scaler sees a plain array.
+    window_data_scaled = scaler_transformer.transform(df_window.values)
     
-    # Debug: Check the scaled data statistics (optional)
-    st.write("Scaled Window Data (2D view):", pd.DataFrame(window_data_scaled, columns=cols).describe())
+    # Debug: Print scaled data statistics
+    st.write("Scaled Data Stats:", pd.DataFrame(window_data_scaled, columns=cols).describe())
     
-    # Add the batch dimension to match the model's expected input shape: (1, window_size, num_features)
+    # Add the batch dimension (expected shape: (1, window_size, num_features))
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(cols))
     
-    # Check for any NaN values in the scaled data
+    # Debug: Print the final input shape and a 2D view for inspection
+    st.write("Final Input Shape:", window_data_scaled.shape)
+    st.write("Scaled Window Data (2D view):", pd.DataFrame(window_data_scaled.reshape(window_size, len(cols)), columns=cols))
+    
+    # Check for any NaN values in the input
     if np.isnan(window_data_scaled).any():
         st.error("NaN values found in scaled input data.")
         st.stop()
+    
+    # Test with a dummy input (optional) to check model behavior
+    dummy_input = np.ones((1, window_size, len(cols)), dtype=np.float32)
+    dummy_pred = transformer_model.predict(dummy_input)
+    st.write("Dummy Prediction (should not be NaN):", dummy_pred)
     
     # Make prediction using the Transformer model on the scaled data
     transformer_prediction = transformer_model.predict(window_data_scaled)
     predicted_price_transformer = float(transformer_prediction[0][0])
     
-    # Current price from the CSV (Yahoo 'Close' from the last row)
+    # Get the current price (Yahoo 'Close' from the last row)
     current_price_transformer = float(features_transformer[-1, 3])
     
     st.subheader("📊 Tomorrow's Prediction (Transformer Model)")
