@@ -39,7 +39,8 @@ def fetch_gold_api_price() -> float:
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
-        # Expecting the response to have a "price" field
+        # Debug: Uncomment the following line to see the API response in your app during development
+        # st.write("GoldAPI Response:", data)
         return data.get("price")
     else:
         st.error("Error fetching data from GoldAPI")
@@ -55,7 +56,7 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
     """
     Predict tomorrow's gold price using the LSTM and XGBoost models.
-    This function also fetches the current gold price from GoldAPI to compute the difference.
+    Also fetches the current gold price from GoldAPI to compute the difference.
     Returns a dictionary with various price metrics.
     """
     # Get the latest Yahoo Finance data
@@ -103,7 +104,7 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
     )
 
     # Adjusted prices using the difference between Yahoo and GoldAPI prices
-    adjusted_current_price = current_price - diff      # Essentially the GoldAPI price
+    adjusted_current_price = current_price - diff      # This equals the GoldAPI price
     adjusted_predicted_price = predicted_price - diff
     adjusted_breakpoint_price = breakpoint_price - diff
 
@@ -117,7 +118,7 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
         "adjusted_current_price": adjusted_current_price,
         "adjusted_predicted_price": adjusted_predicted_price,
         "adjusted_breakpoint_price": adjusted_breakpoint_price,
-        "diff": diff  # Including diff for reference if needed
+        "diff": diff  # For debugging/reference
     }
 
 def plot_price_movement(predictions: dict) -> go.Figure:
@@ -222,7 +223,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price"):
         st.metric(label="📊 Adjusted Predicted Price", value=f"${predictions['adjusted_predicted_price']:.2f}")
         st.metric(label="🔴 Adjusted Breakpoint Price", value=f"${predictions['adjusted_breakpoint_price']:.2f}")
     
-    # Optionally, display the computed difference for reference
+    # Optionally, display the computed difference for debugging/reference
     st.write(f"**Price Difference (Yahoo - GoldAPI):** ${predictions['diff']:.2f}")
     
     # Plot interactive prediction chart
@@ -246,6 +247,3 @@ if news_data and news_data.get("articles"):
         url = article.get("url", "#")
         sentiment = TextBlob(title).sentiment.polarity
         sentiment_text = "🔴 Negative" if sentiment < -0.1 else "🟢 Positive" if sentiment > 0.1 else "⚪ Neutral"
-        st.markdown(f"[📌 {title}]({url}) - {sentiment_text}")
-else:
-    st.write("No news articles available at the moment.")
