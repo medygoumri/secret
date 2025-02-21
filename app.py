@@ -25,7 +25,7 @@ st.title("📈 Gold Price Prediction Dashboard")
 if st.button("🔮 Predict Tomorrow's Gold Price"):
 
     # Fetch the latest gold price (ensures updated data)
-    gold_data = yf.download("GC=F", period="200d", interval="1d")  # Get 200 days for trend analysis
+    gold_data = yf.download("GC=F", period="7d", interval="1d")  # Get 7 days for safety
 
     if gold_data.empty:
         st.error("Error: No data received for gold prices. Try again later.")
@@ -69,53 +69,43 @@ if st.button("🔮 Predict Tomorrow's Gold Price"):
         # Define breakpoint price (convert to float)
         breakpoint_price = float(current_price * 1.01 if xgb_prediction[0] == 1 else current_price * 0.99)
 
+        # **Calculate Adjusted Predictions (-20)**
+        adjusted_current_price = current_price - 20
+        adjusted_predicted_price = predicted_price - 20
+        adjusted_breakpoint_price = breakpoint_price - 20
+
         # **Show Predictions**
         st.subheader("📊 Tomorrow's Prediction")
         st.write(f"📅 **Today's Date:** {today_date}")
         st.write(f"📅 **Latest Available Data:** {latest_available_date}")
         st.write(f"🔮 **Prediction for:** {tomorrow_date}")
         
-        st.metric(label="📌 Current Gold Price", value=f"${current_price:.2f}")
-        st.metric(label="📊 Predicted Price for Tomorrow", value=f"${predicted_price:.2f}")
-        st.metric(label="🔴 Breakpoint Price", value=f"${breakpoint_price:.2f}")
+        col1, col2 = st.columns(2)
 
-        # **Confidence Interval**
-        confidence_interval = predicted_price * 0.015
-        upper_bound = predicted_price + confidence_interval
-        lower_bound = predicted_price - confidence_interval
-        st.write(f"📉 **Confidence Interval:** ${lower_bound:.2f} - ${upper_bound:.2f}")
+        with col1:
+            st.metric(label="📌 Current Gold Price", value=f"${current_price:.2f}")
+            st.metric(label="📊 Predicted Price", value=f"${predicted_price:.2f}")
+            st.metric(label="🔴 Breakpoint Price", value=f"${breakpoint_price:.2f}")
 
-        # **Moving Averages**
-        gold_data["50_MA"] = gold_data["Close"].rolling(window=50).mean()
-        gold_data["200_MA"] = gold_data["Close"].rolling(window=200).mean()
+        with col2:
+            st.metric(label="📌 Adjusted Current Price (-20)", value=f"${adjusted_current_price:.2f}")
+            st.metric(label="📊 Adjusted Predicted Price (-20)", value=f"${adjusted_predicted_price:.2f}")
+            st.metric(label="🔴 Adjusted Breakpoint (-20)", value=f"${adjusted_breakpoint_price:.2f}")
 
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(gold_data.index, gold_data["Close"], label="Gold Price", color='blue')
-        ax.plot(gold_data.index, gold_data["50_MA"], label="50-Day MA", linestyle='dashed', color='orange')
-        ax.plot(gold_data.index, gold_data["200_MA"], label="200-Day MA", linestyle='dashed', color='red')
+        # **Visualization: Normal Price Graph**
+        fig, ax = plt.subplots(figsize=(8, 5))
 
-        ax.set_xlabel("Date")
+        ax.plot(["Current Price", "Breakpoint", "Predicted Price"],
+                [current_price, breakpoint_price, predicted_price], marker='o', linestyle='dashed', color='b', label="Normal Prediction")
+
+        ax.plot(["Current Price", "Breakpoint", "Predicted Price"],
+                [adjusted_current_price, adjusted_breakpoint_price, adjusted_predicted_price], marker='o', linestyle='dashed', color='r', label="Adjusted Prediction (-20)")
+
+        ax.set_xlabel("Price Movement Stages")
         ax.set_ylabel("Gold Price (USD)")
-        ax.set_title("Gold Price with Moving Averages")
+        ax.set_title("Predicted Gold Price Movement")
         ax.legend()
         st.pyplot(fig)
-
-        # **RSI Indicator**
-        def compute_rsi(data, window=14):
-            delta = data["Close"].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-            rs = gain / loss
-            return 100 - (100 / (1 + rs))
-
-        gold_data["RSI"] = compute_rsi(gold_data)
-        latest_rsi = gold_data["RSI"].iloc[-1]
-        st.write(f"📊 **RSI Indicator (Last Close):** {latest_rsi:.2f}")
-
-        if latest_rsi > 70:
-            st.warning("🚨 Overbought! Possible Price Drop Ahead")
-        elif latest_rsi < 30:
-            st.success("💹 Oversold! Possible Price Increase Ahead")
 
         # **Historical Prices Table**
         st.subheader("📜 Historical Gold Prices (Last 30 Days)")
