@@ -410,6 +410,9 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
 # ----------------------------
 # Transformer Model Prediction Section (Daily Live Data)
 # ----------------------------
+# ----------------------------
+# Transformer Model Prediction Section (Daily Live Data)
+# ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)"):
     # Load custom objects (if your Transformer model uses any custom layers)
     try:
@@ -429,31 +432,31 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
         compile=False
     )
     
-    # Fetch live daily data using yfinance with an increased period.
+    # Fetch live daily data using yfinance (period set to 60 days)
     live_data = yf.download("GC=F", period="60d", interval="1d")
     if live_data.empty:
         st.error("Failed to fetch live data from Yahoo Finance.")
         st.stop()
     
-    # If the DataFrame has MultiIndex columns, flatten them
+    # Flatten columns if necessary (handle MultiIndex)
     if isinstance(live_data.columns, pd.MultiIndex):
         live_data.columns = live_data.columns.get_level_values(0)
     
     st.write("Live data columns:", live_data.columns.tolist())
     
-    # Define the required columns for our model
+    # Define required columns and fill missing ones
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     for col in required_cols:
         if col not in live_data.columns:
             st.warning(f"Column '{col}' not found in live data. Filling with default value (0.0).")
             live_data[col] = 0.0
-
-    # Select and clean the required columns
+    
+    # Select and clean the data
     live_data = live_data[required_cols]
     live_data = live_data.apply(pd.to_numeric, errors='coerce')
     live_data.dropna(inplace=True)
     
-    # Convert to NumPy array
+    # Convert data to NumPy array
     features_live = live_data.values.astype(np.float32)
     
     window_size = 30  # Use the last 30 days for prediction
@@ -461,11 +464,11 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
         st.error(f"Not enough live data to perform prediction. Data available: {len(features_live)} days.")
         st.stop()
     
-    # Prepare the input window (last 30 days)
+    # Prepare input window (last 30 days)
     window_data = features_live[-window_size:]
     df_window = pd.DataFrame(window_data, columns=required_cols)
     
-    # Load or fit the input scaler (ideally, the one used during training)
+    # Load or fit the input scaler (for features)
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
         st.write("Loaded saved input scaler.")
@@ -475,21 +478,31 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
         scaler_transformer = StandardScaler()
         scaler_transformer.fit(features_live)
     
-    # Transform the window data and add the batch dimension
+    # Scale and reshape the input window
     window_data_scaled = scaler_transformer.transform(df_window.values)
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(required_cols))
     
-    # Make prediction using the Transformer model on the scaled data
+    # Make prediction using the Transformer model
     transformer_prediction = transformer_model.predict(window_data_scaled)
-    # Use the raw output directly (since target scaler is not available or working)
-    predicted_price_transformer = float(transformer_prediction[0][0])
+    raw_pred = transformer_prediction[0][0]
     
-    # Get the current price from live data (Yahoo 'Close' of the last day)
+    # Attempt to load the target scaler and inverse-transform the prediction
+    try:
+        target_scaler = joblib.load("scaler_target.pkl")
+        st.write("Loaded saved target scaler.")
+        predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
+    except Exception as e:
+        st.warning("Target scaler not found or error in inverse transforming. Using raw model output. "
+                   "For accurate predictions, retrain your model with target scaling and save the scaler.")
+        predicted_price_transformer = float(raw_pred)
+    
+    # Get the current price from live data (last day's 'Close')
     current_price_transformer = float(features_live[-1, 3])
     
     st.subheader("📊 Transformer Model Prediction (Daily Live Data)")
     st.write(f"📌 Current Gold Price (Yahoo Live): ${current_price_transformer:.2f}")
     st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
+
 
 
 
