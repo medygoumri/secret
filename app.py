@@ -404,6 +404,9 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
 # ----------------------------
 # Transformer Model Prediction Section (Daily Live Data)
 # ----------------------------
+# ----------------------------
+# Transformer Model Prediction Section (Daily Live Data)
+# ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)"):
     # Load custom objects (if your Transformer model uses any custom layers)
     try:
@@ -423,8 +426,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
         compile=False
     )
     
-    # Fetch live daily data using yfinance.
-    # Increase the period to "60d" to get enough valid trading days.
+    # Fetch live daily data using yfinance (increasing period to 60d to ensure sufficient data)
     live_data = yf.download("GC=F", period="60d", interval="1d")
     if live_data.empty:
         st.error("Failed to fetch live data from Yahoo Finance.")
@@ -434,24 +436,22 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     
     # Define the required columns for our model
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-    
-    # If any required column is missing, fill it with a default value (e.g., 0.0)
     for col in required_cols:
         if col not in live_data.columns:
             st.warning(f"Column '{col}' not found in live data. Filling with default value (0.0).")
             live_data[col] = 0.0
     
-    # Select only the required columns and clean the data
+    # Select and clean the required columns
     live_data = live_data[required_cols]
     live_data = live_data.apply(pd.to_numeric, errors='coerce')
     live_data.dropna(inplace=True)
     
-    # Convert to NumPy array for further processing
+    # Convert to NumPy array
     features_live = live_data.values.astype(np.float32)
     
     window_size = 30  # Use the last 30 days for prediction
     if len(features_live) < window_size:
-        st.error("Not enough live data to perform prediction. Data available: {} days.".format(len(features_live)))
+        st.error(f"Not enough live data to perform prediction. Data available: {len(features_live)} days.")
         st.stop()
     
     # Prepare the input window (last 30 days)
@@ -468,15 +468,15 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
         scaler_transformer = StandardScaler()
         scaler_transformer.fit(features_live)
     
-    # Transform the window data
+    # Transform the window data and add batch dimension
     window_data_scaled = scaler_transformer.transform(df_window.values)
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(required_cols))
     
-    # Make prediction using the Transformer model
+    # Make prediction using the Transformer model on the scaled data
     transformer_prediction = transformer_model.predict(window_data_scaled)
-    predicted_price_transformer = float(transformer_prediction[0][0])
+    raw_pred = transformer_prediction[0][0]  # ensure raw_pred is computed
     
-    # Load the target scaler (if available) to inverse-transform the prediction
+    # Try loading the target scaler to inverse-transform the prediction
     try:
         target_scaler = joblib.load("scaler_target.pkl")
         st.write("Loaded saved target scaler.")
