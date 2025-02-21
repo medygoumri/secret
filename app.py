@@ -304,7 +304,6 @@ if 'predictions' in locals():
 # Transformer Model Prediction Section
 # ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
-    # Import custom objects (if your Transformer model uses any custom layers)
     try:
         from models.transformer_model import transformer_encoder, build_transformer_model
         custom_objects = {
@@ -315,50 +314,51 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     except ImportError:
         custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model (in inference mode, so compilation is disabled)
     transformer_model = tf.keras.models.load_model(
         "models/transformer_gold_model.h5",
         custom_objects=custom_objects,
         compile=False
     )
     
-    # Load historical gold data from CSV
     transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
     cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     transformer_data[cols] = transformer_data[cols].apply(pd.to_numeric, errors='coerce')
     transformer_data.dropna(inplace=True)
     features_transformer = transformer_data[cols].values.astype(np.float32)
     
-    window_size = 30  # Use the last 30 days for prediction
+    window_size = 30
     if len(features_transformer) < window_size:
         st.error("Not enough data to perform transformer prediction.")
         st.stop()
     
-    # Prepare the input window
     window_data = features_transformer[-window_size:]
-    
-    # Convert to a DataFrame with proper column names (for scaler compatibility)
     df_window = pd.DataFrame(window_data, columns=cols)
     
-    # Load the previously saved scaler (if available)
-    # If not, you can compute one on the fly (not ideal, but a workaround)
-    # scaler_transformer = joblib.load("scaler_transformer.pkl")
-    # For this example, we'll fit a scaler on the available data:
-    from sklearn.preprocessing import StandardScaler
-    scaler_transformer = StandardScaler()
-    scaler_transformer.fit(features_transformer)
+    # Load the scaler that was saved during training (if available)
+    # Otherwise, fit one on the available data (less ideal)
+    try:
+        scaler_transformer = joblib.load("scaler_transformer.pkl")
+    except Exception as e:
+        st.warning("Scaler file not found. Fitting scaler on current data (this may cause differences from training).")
+        from sklearn.preprocessing import StandardScaler
+        scaler_transformer = StandardScaler()
+        scaler_transformer.fit(features_transformer)
     
-    # Transform the window data using the same scaler
-    window_data_scaled = scaler_transformer.transform(df_window)
+    # Convert df_window to a NumPy array to avoid feature name warnings
+    window_data_scaled = scaler_transformer.transform(df_window.values)
     
-    # **Add the batch dimension:**
+    # Debug: Check if any NaN values exist
+    if np.isnan(window_data_scaled).any():
+        st.error("NaN values found in scaled input data.")
+        st.stop()
+    
+    # Add batch dimension
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(cols))
     
-    # Make prediction using the Transformer model on the scaled data
+    st.write("Scaled Window Data:", window_data_scaled)
+    
     transformer_prediction = transformer_model.predict(window_data_scaled)
     predicted_price_transformer = float(transformer_prediction[0][0])
-    
-    # Current price from the CSV (Yahoo 'Close' from the last row)
     current_price_transformer = float(features_transformer[-1, 3])
     
     st.subheader("📊 Tomorrow's Prediction (Transformer Model)")
