@@ -62,20 +62,21 @@ st.write(f"📊 **Predicted Gold Price for Tomorrow:** **${predicted_price:.2f}*
 st.write(f"🔴 **Breakpoint Price:** **${breakpoint_price:.2f}**")
 
 
-    # Visualization
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(["Current Price", "Breakpoint", "Predicted Price"],
-            [current_price, breakpoint_price, predicted_price], marker='o', linestyle='dashed', color='b')
+   # Visualization
+fig, ax = plt.subplots(figsize=(8, 5))
 
-    # Add labels
-    ax.set_xlabel("Price Movement Stages")
-    ax.set_ylabel("Gold Price (USD)")
-    ax.set_title("Predicted Gold Price Movement and Breakpoint")
+ax.plot(["Current Price", "Breakpoint", "Predicted Price"],
+        [current_price, breakpoint_price, predicted_price], marker='o', linestyle='dashed', color='b')
 
-    # Annotate points
-    ax.text(0, current_price, f"${current_price:.2f}", ha='right', fontsize=10)
-    ax.text(1, breakpoint_price, f"${breakpoint_price:.2f}", ha='center', fontsize=10, color='red')
-    ax.text(2, predicted_price, f"${predicted_price:.2f}", ha='left', fontsize=10, color='green')
+# Add labels
+ax.set_xlabel("Price Movement Stages")
+ax.set_ylabel("Gold Price (USD)")
+ax.set_title("Predicted Gold Price Movement and Breakpoint")
 
-    # Show the plot in Streamlit
-    st.pyplot(fig)
+# Annotate points
+ax.text(0, current_price, f"${current_price:.2f}", ha='right', fontsize=10)
+ax.text(1, breakpoint_price, f"${breakpoint_price:.2f}", ha='center', fontsize=10, color='red')
+ax.text(2, predicted_price, f"${predicted_price:.2f}", ha='left', fontsize=10, color='green')
+
+# Show the plot in Streamlit
+st.pyplot(fig)
