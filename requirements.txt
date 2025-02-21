@@ -1,3 +1,5 @@
+tf-agents
+gym
 textblob
 streamlit
 yfinance
