@@ -65,20 +65,34 @@ if st.button("🔮 Predict Gold Price for Tomorrow"):
         # Define breakpoint price (convert to float)
         breakpoint_price = float(current_price * 1.01 if xgb_prediction[0] == 1 else current_price * 0.99)
 
-        # Display Predictions
+        # **Calculate Adjusted Predictions (Subtract 20)**
+        adjusted_current_price = current_price - 20
+        adjusted_predicted_price = predicted_price - 20
+        adjusted_breakpoint_price = breakpoint_price - 20
+
+        # **Display Predictions**
         st.write(f"📅 **Today's Date:** {today_date}")
         st.write(f"📅 **Latest Available Data:** {latest_available_date}")
         st.write(f"🔮 **Prediction for:** {tomorrow_date}")
         
+        st.subheader("📌 Normal Predictions")
         st.write(f"📌 **Current Gold Price:** **${current_price:.2f}**")
         st.write(f"📊 **Predicted Gold Price for Tomorrow:** **${predicted_price:.2f}**")
         st.write(f"🔴 **Breakpoint Price:** **${breakpoint_price:.2f}**")
 
-        # Visualization
+        st.subheader("📉 Adjusted Predictions (-20)")
+        st.write(f"📌 **Adjusted Current Gold Price:** **${adjusted_current_price:.2f}**")
+        st.write(f"📊 **Adjusted Predicted Gold Price for Tomorrow:** **${adjusted_predicted_price:.2f}**")
+        st.write(f"🔴 **Adjusted Breakpoint Price:** **${adjusted_breakpoint_price:.2f}**")
+
+        # **Visualization**
         fig, ax = plt.subplots(figsize=(8, 5))
 
         ax.plot(["Current Price", "Breakpoint", "Predicted Price"],
-                [current_price, breakpoint_price, predicted_price], marker='o', linestyle='dashed', color='b')
+                [current_price, breakpoint_price, predicted_price], marker='o', linestyle='dashed', color='b', label="Normal Prediction")
+
+        ax.plot(["Current Price", "Breakpoint", "Predicted Price"],
+                [adjusted_current_price, adjusted_breakpoint_price, adjusted_predicted_price], marker='o', linestyle='dashed', color='r', label="Adjusted Prediction (-20)")
 
         # Add labels
         ax.set_xlabel("Price Movement Stages")
@@ -90,5 +104,12 @@ if st.button("🔮 Predict Gold Price for Tomorrow"):
         ax.text(1, breakpoint_price, f"${breakpoint_price:.2f}", ha='center', fontsize=10, color='red')
         ax.text(2, predicted_price, f"${predicted_price:.2f}", ha='left', fontsize=10, color='green')
 
+        # Annotate adjusted points
+        ax.text(0, adjusted_current_price, f"${adjusted_current_price:.2f}", ha='right', fontsize=10, color='darkred')
+        ax.text(1, adjusted_breakpoint_price, f"${adjusted_breakpoint_price:.2f}", ha='center', fontsize=10, color='purple')
+        ax.text(2, adjusted_predicted_price, f"${adjusted_predicted_price:.2f}", ha='left', fontsize=10, color='orange')
+
+        ax.legend()
+        
         # Show the plot in Streamlit
         st.pyplot(fig)
