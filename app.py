@@ -315,6 +315,9 @@ if 'predictions' in locals():
 # ----------------------------
 # Transformer Model Prediction Section
 # ----------------------------
+# ----------------------------
+# Transformer Model Prediction Section (Tomorrow Prediction)
+# ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     # Load custom objects (if your Transformer model uses any custom layers)
     try:
@@ -327,22 +330,21 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     except ImportError:
         custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model for inference (without compiling)
+    # Load the Transformer model for inference (compile=False)
     transformer_model = tf.keras.models.load_model(
         "models/transformer_gold_model.h5",
         custom_objects=custom_objects,
         compile=False
     )
     
-    # Load and clean historical gold data from CSV
+    # Load historical gold data from CSV (daily data)
     transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
     cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     transformer_data[cols] = transformer_data[cols].apply(pd.to_numeric, errors='coerce')
     transformer_data.dropna(inplace=True)
     features_transformer = transformer_data[cols].values.astype(np.float32)
     
-    # Ensure we have enough data for the window
-    window_size = 30  # last 30 days
+    window_size = 30  # Use the last 30 days for prediction
     if len(features_transformer) < window_size:
         st.error("Not enough data to perform transformer prediction.")
         st.stop()
@@ -351,32 +353,101 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     window_data = features_transformer[-window_size:]
     df_window = pd.DataFrame(window_data, columns=cols)
     
-    # Load the scaler used during training if available; otherwise, fit one on current data
+    # Load the scaler used during training for input features.
+    # (If not available, fit one on the available features—but this may not match training exactly.)
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
-        st.write("Loaded saved scaler.")
+        st.write("Loaded saved input scaler.")
     except Exception as e:
-        st.warning("Saved scaler not found. Fitting scaler on current data (this may differ from training).")
+        st.warning("Input scaler not found. Fitting scaler on current data (may differ from training).")
         from sklearn.preprocessing import StandardScaler
         scaler_transformer = StandardScaler()
         scaler_transformer.fit(features_transformer)
     
-    # Transform the window data using the DataFrame values so that feature names are not lost
+    # Transform the window data (pass a DataFrame to preserve feature names)
     window_data_scaled = scaler_transformer.transform(df_window.values)
     
-    # Reshape the scaled data to add the batch dimension (expected shape: (1, window_size, num_features))
+    # Add batch dimension: shape becomes (1, window_size, num_features)
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(cols))
     
     # Make prediction using the Transformer model on the scaled data
     transformer_prediction = transformer_model.predict(window_data_scaled)
-    predicted_price_transformer = float(transformer_prediction[0][0])
+    raw_pred = transformer_prediction[0][0]
     
-    # Get the current gold price from the CSV (Yahoo 'Close' from the last row)
+    # Now load the target scaler (used to scale the 'Close' during training) so we can invert the scaling.
+    try:
+        target_scaler = joblib.load("scaler_target.pkl")
+        st.write("Loaded saved target scaler.")
+    except Exception as e:
+        st.warning("Target scaler not found. Fitting target scaler on current 'Close' values (may differ from training).")
+        from sklearn.preprocessing import StandardScaler
+        target_scaler = StandardScaler()
+        target_scaler.fit(transformer_data[['Close']])
+    
+    # Inverse transform the raw prediction to get the actual price.
+    # Note: target_scaler expects a 2D array.
+    predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
+    
+    # Get the current gold price from the CSV (Yahoo 'Close' from last row)
     current_price_transformer = float(features_transformer[-1, 3])
     
-    # Display the results
-    st.subheader("📊 Transformer Model Prediction")
+    st.subheader("📊 Transformer Model Prediction (Daily)")
     st.write(f"📌 Current Gold Price (Yahoo): ${current_price_transformer:.2f}")
     st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
+
+# ----------------------------
+# Transformer Model Next Hour Prediction Section (Hourly Data)
+# ----------------------------
+if st.button("🔮 Predict Next Hour Gold Price (Transformer Model)"):
+    # For hourly prediction, we fetch hourly data using yfinance.
+    hourly_data = yf.download("GC=F", period="2d", interval="1h")
+    if hourly_data.empty:
+        st.error("Failed to fetch hourly data.")
+        st.stop()
+    
+    # Assume the same columns are available: 'Open', 'High', 'Low', 'Close', 'Volume'
+    hourly_data = hourly_data[['Open', 'High', 'Low', 'Close', 'Volume']]
+    hourly_data = hourly_data.apply(pd.to_numeric, errors='coerce')
+    hourly_data.dropna(inplace=True)
+    features_hourly = hourly_data.values.astype(np.float32)
+    
+    # Decide on a window size for hourly data, e.g., last 24 hours
+    hourly_window = 24
+    if len(features_hourly) < hourly_window:
+        st.error("Not enough hourly data to perform prediction.")
+        st.stop()
+    
+    window_hourly = features_hourly[-hourly_window:]
+    df_window_hourly = pd.DataFrame(window_hourly, columns=cols)
+    
+    # For hourly prediction, you should ideally use a scaler fitted on hourly features.
+    # We'll try to load a separate scaler; if not, fit one on the current hourly features.
+    try:
+        scaler_hourly = joblib.load("scaler_transformer_hourly.pkl")
+        st.write("Loaded saved hourly scaler.")
+    except Exception as e:
+        st.warning("Hourly scaler not found. Fitting scaler on current hourly data (may differ from training).")
+        from sklearn.preprocessing import StandardScaler
+        scaler_hourly = StandardScaler()
+        scaler_hourly.fit(features_hourly)
+    
+    # Transform the hourly window data
+    window_hourly_scaled = scaler_hourly.transform(df_window_hourly.values)
+    window_hourly_scaled = window_hourly_scaled.reshape(1, hourly_window, len(cols))
+    
+    # Make hourly prediction using the same transformer model (if it was trained on hourly data)
+    hourly_prediction = transformer_model.predict(window_hourly_scaled)
+    raw_hourly_pred = hourly_prediction[0][0]
+    
+    # For the target scaling, we assume the same target scaler applies (if your model was trained with hourly targets,
+    # you may have a separate target scaler; here we reuse the same for illustration)
+    predicted_price_hourly = float(target_scaler.inverse_transform([[raw_hourly_pred]])[0][0])
+    
+    # Current hourly price from the hourly data (last row 'Close')
+    current_price_hourly = float(features_hourly[-1, 3])
+    
+    st.subheader("📊 Transformer Model Prediction (Hourly)")
+    st.write(f"📌 Current Gold Price (Hourly Yahoo): ${current_price_hourly:.2f}")
+    st.write(f"🔮 Predicted Gold Price for Next Hour (Transformer): ${predicted_price_hourly:.2f}")
 
 
