@@ -7,7 +7,6 @@ import datetime
 import pandas as pd
 import requests
 import plotly.graph_objects as go
-import plotly.figure_factory as ff
 from textblob import TextBlob
 
 # ----------------------------
@@ -26,6 +25,26 @@ def fetch_gold_data(period: str, interval: str) -> pd.DataFrame:
     data = yf.download("GC=F", period=period, interval=interval)
     return data
 
+@st.cache_data
+def fetch_gold_api_price() -> float:
+    """
+    Fetch the current gold price from GoldAPI.
+    Returns the price as a float.
+    """
+    headers = {
+        "x-access-token": "goldapi-1ppsm6y8o4sp-io",
+        "Content-Type": "application/json"
+    }
+    url = "https://www.goldapi.io/api/XAU/USD"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        # Expecting the response to have a "price" field
+        return data.get("price")
+    else:
+        st.error("Error fetching data from GoldAPI")
+        return None
+
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Calculate technical indicators (SMA and EMA) and add them to the DataFrame."""
     df['SMA_10'] = df['Close'].rolling(window=10).mean()
@@ -36,8 +55,10 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
     """
     Predict tomorrow's gold price using the LSTM and XGBoost models.
+    This function also fetches the current gold price from GoldAPI to compute the difference.
     Returns a dictionary with various price metrics.
     """
+    # Get the latest Yahoo Finance data
     gold_latest = gold_data.tail(1)
     latest_available_date = gold_latest.index[-1].strftime('%Y-%m-%d')
 
@@ -46,10 +67,21 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
         st.stop()
 
     current_price = float(gold_latest['Close'].values[0])
+    
+    # Fetch current price from GoldAPI
+    goldapi_price = fetch_gold_api_price()
+    if goldapi_price is None:
+        st.error("Error: Unable to fetch current gold price from GoldAPI.")
+        st.stop()
+    
+    # Calculate the difference between Yahoo and GoldAPI prices
+    diff = current_price - goldapi_price
+
+    # Get tomorrow's date
     tomorrow_date = (datetime.datetime.strptime(latest_available_date, '%Y-%m-%d') +
                      datetime.timedelta(days=1)).strftime('%Y-%m-%d')
 
-    # Preprocess latest data for prediction
+    # Preprocess features for prediction
     latest_features = gold_latest[['Open', 'High', 'Low', 'Close', 'Volume']].values
     latest_features_scaled = scaler.transform(latest_features)
     latest_features_lstm = latest_features_scaled.reshape((1, 1, latest_features_scaled.shape[1]))
@@ -70,10 +102,10 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
         current_price * 1.01 if xgb_prediction[0] == 1 else current_price * 0.99
     )
 
-    # Adjusted predictions (subtracting 20 for alternate scenario)
-    adjusted_current_price = current_price - 20
-    adjusted_predicted_price = predicted_price - 20
-    adjusted_breakpoint_price = breakpoint_price - 20
+    # Adjusted prices using the difference between Yahoo and GoldAPI prices
+    adjusted_current_price = current_price - diff      # Essentially the GoldAPI price
+    adjusted_predicted_price = predicted_price - diff
+    adjusted_breakpoint_price = breakpoint_price - diff
 
     return {
         "today_date": datetime.datetime.today().strftime('%Y-%m-%d'),
@@ -85,6 +117,7 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
         "adjusted_current_price": adjusted_current_price,
         "adjusted_predicted_price": adjusted_predicted_price,
         "adjusted_breakpoint_price": adjusted_breakpoint_price,
+        "diff": diff  # Including diff for reference if needed
     }
 
 def plot_price_movement(predictions: dict) -> go.Figure:
@@ -109,7 +142,7 @@ def plot_price_movement(predictions: dict) -> go.Figure:
         x=categories,
         y=adjusted_prices,
         mode='lines+markers',
-        name='Adjusted Prediction (-20)',
+        name='Adjusted Prediction (GoldAPI Diff)',
         line=dict(dash='dash', color='red'),
         marker=dict(color='red')
     ))
@@ -178,24 +211,27 @@ if st.button("🔮 Predict Tomorrow's Gold Price"):
     st.write(f"📅 **Today's Date:** {predictions['today_date']}")
     st.write(f"📅 **Latest Available Data:** {predictions['latest_available_date']}")
     st.write(f"🔮 **Prediction for:** {predictions['tomorrow_date']}")
-
+    
     col1, col2 = st.columns(2)
     with col1:
-        st.metric(label="📌 Current Gold Price", value=f"${predictions['current_price']:.2f}")
-        st.metric(label="📊 Predicted Price", value=f"${predictions['predicted_price']:.2f}")
-        st.metric(label="🔴 Breakpoint Price", value=f"${predictions['breakpoint_price']:.2f}")
+        st.metric(label="📌 Current Gold Price (Yahoo)", value=f"${predictions['current_price']:.2f}")
+        st.metric(label="📊 Predicted Price (Yahoo)", value=f"${predictions['predicted_price']:.2f}")
+        st.metric(label="🔴 Breakpoint Price (Yahoo)", value=f"${predictions['breakpoint_price']:.2f}")
     with col2:
-        st.metric(label="📌 Adjusted Current Price (-20)", value=f"${predictions['adjusted_current_price']:.2f}")
-        st.metric(label="📊 Adjusted Predicted Price (-20)", value=f"${predictions['adjusted_predicted_price']:.2f}")
-        st.metric(label="🔴 Adjusted Breakpoint (-20)", value=f"${predictions['adjusted_breakpoint_price']:.2f}")
-
+        st.metric(label="📌 Adjusted Current Price (GoldAPI)", value=f"${predictions['adjusted_current_price']:.2f}")
+        st.metric(label="📊 Adjusted Predicted Price", value=f"${predictions['adjusted_predicted_price']:.2f}")
+        st.metric(label="🔴 Adjusted Breakpoint Price", value=f"${predictions['adjusted_breakpoint_price']:.2f}")
+    
+    # Optionally, display the computed difference for reference
+    st.write(f"**Price Difference (Yahoo - GoldAPI):** ${predictions['diff']:.2f}")
+    
     # Plot interactive prediction chart
     st.plotly_chart(plot_price_movement(predictions), use_container_width=True)
 
 # ----------------------------
 # Historical Data Visualization & Table
 # ----------------------------
-st.subheader("📜 Historical Gold Prices (Last {} Days)".format(historical_days))
+st.subheader(f"📜 Historical Gold Prices (Last {historical_days} Days)")
 st.dataframe(gold_data_history[['Close']].tail(30))
 st.plotly_chart(plot_candlestick_chart(gold_data_history), use_container_width=True)
 
