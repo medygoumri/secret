@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from textblob import TextBlob
 
 # ----------------------------
-# Load Pre-trained Models & Scaler
+# Load Pre-trained Models & Scaler (for LSTM/XGBoost predictions)
 # ----------------------------
 lstm_model = tf.keras.models.load_model("lstm_gold_model.h5")
 xgb_model = joblib.load("xgb_gold_model.pkl")
@@ -39,8 +39,7 @@ def fetch_gold_api_price() -> float:
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
-        # Debug: Uncomment the following line to display the API response
-        # st.write("GoldAPI Response:", data)
+        # st.write("GoldAPI Response:", data)  # Uncomment for debugging
         return data.get("price")
     else:
         st.error("Error fetching data from GoldAPI")
@@ -239,7 +238,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price"):
     predictions = predict_tomorrow_price(gold_data_prediction)
 
     # Display basic information and metrics
-    st.subheader("📊 Tomorrow's Prediction")
+    st.subheader("📊 Tomorrow's Prediction (LSTM/XGBoost)")
     st.write(f"📅 **Today's Date:** {predictions['today_date']}")
     st.write(f"📅 **Latest Available Data:** {predictions['latest_available_date']}")
     st.write(f"🔮 **Prediction for:** {predictions['tomorrow_date']}")
@@ -254,10 +253,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price"):
         st.metric(label="📊 Adjusted Predicted Price", value=f"${predictions['adjusted_predicted_price']:.2f}")
         st.metric(label="🔴 Adjusted Breakpoint Price", value=f"${predictions['adjusted_breakpoint_price']:.2f}")
     
-    # Optionally, display the computed difference for debugging/reference
     st.write(f"**Price Difference (Yahoo - GoldAPI):** ${predictions['diff']:.2f}")
-    
-    # Plot interactive prediction chart
     st.plotly_chart(plot_price_movement(predictions), use_container_width=True)
 
 # ----------------------------
@@ -286,17 +282,16 @@ else:
 # Predicted Trading View Chart & Details
 # ----------------------------
 if 'predictions' in locals():
-    st.subheader("📈 Predicted Trading View for Tomorrow")
+    st.subheader("📈 Predicted Trading View for Tomorrow (LSTM/XGBoost)")
     trading_chart = plot_predicted_trading_chart(predictions)
     st.plotly_chart(trading_chart, use_container_width=True)
     
-    # Calculate predicted values for display
     predicted_open = predictions["current_price"]
     predicted_close = predictions["predicted_price"]
     predicted_high = max(predictions["current_price"], predictions["predicted_price"], predictions["breakpoint_price"])
     predicted_low = min(predictions["current_price"], predictions["predicted_price"], predictions["breakpoint_price"])
     
-    st.markdown("### Predicted Prices Details")
+    st.markdown("### Predicted Prices Details (LSTM/XGBoost)")
     st.write(f"**Predicted Open:** ${predicted_open:.2f}")
     st.write(f"**Predicted High:** ${predicted_high:.2f}")
     st.write(f"**Predicted Low:** ${predicted_low:.2f}")
@@ -306,12 +301,21 @@ if 'predictions' in locals():
 # Transformer Model Prediction Section
 # ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
-    # Load the Transformer model from the models folder
-    transformer_model = tf.keras.models.load_model("models/transformer_gold_model.h5")
+    # Import custom objects (if your Transformer model uses any custom layers)
+    try:
+        from models.transformer_model import transformer_encoder, build_transformer_model
+        custom_objects = {
+            "transformer_encoder": transformer_encoder,
+            "build_transformer_model": build_transformer_model,
+        }
+    except ImportError:
+        custom_objects = {}
+    
+    # Load the Transformer model with custom_objects if needed
+    transformer_model = tf.keras.models.load_model("models/transformer_gold_model.h5", custom_objects=custom_objects)
     
     # Load historical gold data from CSV
     transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
-    # Ensure relevant columns are numeric
     transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']] = transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']].apply(pd.to_numeric, errors='coerce')
     features_transformer = transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']].values.astype(np.float32)
     
@@ -327,7 +331,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     transformer_prediction = transformer_model.predict(window_data)
     predicted_price_transformer = float(transformer_prediction[0][0])
     
-    # Current price from Yahoo Finance (last row's 'Close')
+    # Current price from the CSV (Yahoo 'Close' from last row)
     current_price_transformer = float(features_transformer[-1, 3])
     
     st.subheader("📊 Tomorrow's Prediction (Transformer Model)")
