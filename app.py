@@ -340,8 +340,9 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     scaler_transformer = joblib.load("scaler_transformer.pkl")
     
     # Transform the window data using the same scaler as during training
-    window_data_scaled = scaler_transformer.transform(window_data)
-    window_data_scaled = window_data_scaled.reshape(1, window_size, features_transformer.shape[1])
+    window_data = features_transformer[-window_size:]
+    df_window = pd.DataFrame(window_data, columns=cols)
+    window_data_scaled = scaler_transformer.transform(df_window)
     
     # Make prediction using the Transformer model on the scaled data
     transformer_prediction = transformer_model.predict(window_data_scaled)
