@@ -401,6 +401,9 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
 # ----------------------------
 # Transformer Model Prediction Section (Daily)
 # ----------------------------
+# ----------------------------
+# Transformer Model Prediction Section (Daily Live Data)
+# ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)"):
     # Load custom objects (if your Transformer model uses any custom layers)
     try:
@@ -413,7 +416,7 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     except ImportError:
         custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model for inference (compile=False)
+    # Load the Transformer model for inference (without compiling)
     transformer_model = tf.keras.models.load_model(
         "models/transformer_gold_model.h5",
         custom_objects=custom_objects,
@@ -421,8 +424,8 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     )
     
     # Fetch live daily data using yfinance.
-    # Increase the period to get enough data (e.g., 35 days)
-    live_data = yf.download("GC=F", period="35d", interval="1d")
+    # Increase the period to "60d" to get enough valid trading days.
+    live_data = yf.download("GC=F", period="60d", interval="1d")
     if live_data.empty:
         st.error("Failed to fetch live data from Yahoo Finance.")
         st.stop()
@@ -488,4 +491,5 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)
     st.subheader("📊 Transformer Model Prediction (Daily Live Data)")
     st.write(f"📌 Current Gold Price (Yahoo Live): ${current_price_transformer:.2f}")
     st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
+
 
