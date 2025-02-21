@@ -233,7 +233,7 @@ with st.spinner("Fetching historical gold data..."):
     gold_data_history_indicators = add_technical_indicators(gold_data_history.copy())
 
 # ----------------------------
-# Main Prediction and Visualization Section
+# Main Prediction and Visualization Section (LSTM + XGBoost)
 # ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price"):
     predictions = predict_tomorrow_price(gold_data_prediction)
@@ -301,3 +301,35 @@ if 'predictions' in locals():
     st.write(f"**Predicted High:** ${predicted_high:.2f}")
     st.write(f"**Predicted Low:** ${predicted_low:.2f}")
     st.write(f"**Predicted Close:** ${predicted_close:.2f}")
+
+# ----------------------------
+# Transformer Model Prediction Section
+# ----------------------------
+if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
+    # Load the Transformer model from the models folder
+    transformer_model = tf.keras.models.load_model("models/transformer_gold_model.h5")
+    
+    # Load historical gold data from CSV
+    transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
+    # Ensure relevant columns are numeric
+    transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']] = transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']].apply(pd.to_numeric, errors='coerce')
+    features_transformer = transformer_data[['Open', 'High', 'Low', 'Close', 'Volume']].values.astype(np.float32)
+    
+    window_size = 30  # Use the last 30 days for prediction
+    if len(features_transformer) < window_size:
+        st.error("Not enough data to perform transformer prediction.")
+        st.stop()
+    
+    window_data = features_transformer[-window_size:]
+    window_data = np.expand_dims(window_data, axis=0)  # Shape: (1, window_size, num_features)
+    
+    # Make prediction using the Transformer model
+    transformer_prediction = transformer_model.predict(window_data)
+    predicted_price_transformer = float(transformer_prediction[0][0])
+    
+    # Current price from Yahoo Finance (last row's 'Close')
+    current_price_transformer = float(features_transformer[-1, 3])
+    
+    st.subheader("📊 Tomorrow's Prediction (Transformer Model)")
+    st.write(f"📌 Current Gold Price (Yahoo): ${current_price_transformer:.2f}")
+    st.write(f"📊 Predicted Price (Transformer): ${predicted_price_transformer:.2f}")
