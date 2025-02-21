@@ -401,7 +401,10 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
 # ----------------------------
 # Transformer Model Prediction Section (Daily)
 # ----------------------------
-if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
+# ----------------------------
+# Transformer Model Prediction Section (Daily Live Data)
+# ----------------------------
+if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model - Live Data)"):
     # Load custom objects (if your Transformer model uses any custom layers)
     try:
         from models.transformer_model import transformer_encoder, build_transformer_model
@@ -413,64 +416,74 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)"):
     except ImportError:
         custom_objects = {"mse": tf.keras.losses.MeanSquaredError()}
     
-    # Load the Transformer model for inference (without compiling)
+    # Load the Transformer model for inference
     transformer_model = tf.keras.models.load_model(
         "models/transformer_gold_model.h5",
         custom_objects=custom_objects,
         compile=False
     )
     
-    # Load historical gold data from CSV (daily data)
-    transformer_data = pd.read_csv("data/gold_data.csv", index_col=0)
-    cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-    transformer_data[cols] = transformer_data[cols].apply(pd.to_numeric, errors='coerce')
-    transformer_data.dropna(inplace=True)
-    features_transformer = transformer_data[cols].values.astype(np.float32)
+    # Fetch live daily data using yfinance (for example, last 7 days)
+    live_data = yf.download("GC=F", period="7d", interval="1d")
+    if live_data.empty:
+        st.error("Failed to fetch live data from Yahoo Finance.")
+        st.stop()
     
-    window_size = 30  # Use the last 30 days for prediction
-    if len(features_transformer) < window_size:
-        st.error("Not enough data to perform transformer prediction.")
+    # Ensure the required columns exist
+    cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+    if not set(cols).issubset(live_data.columns):
+        st.error("Live data does not contain required columns.")
+        st.stop()
+    
+    # Clean and convert data
+    live_data = live_data[cols]
+    live_data = live_data.apply(pd.to_numeric, errors='coerce')
+    live_data.dropna(inplace=True)
+    
+    # Convert to NumPy array
+    features_live = live_data.values.astype(np.float32)
+    
+    window_size = 30  # Adjust as needed – ensure you have enough live data
+    if len(features_live) < window_size:
+        st.error("Not enough live data to perform prediction.")
         st.stop()
     
     # Prepare the input window (last 30 days)
-    window_data = features_transformer[-window_size:]
+    window_data = features_live[-window_size:]
     df_window = pd.DataFrame(window_data, columns=cols)
     
-    # Load the input scaler used during training (if available)
+    # Load or fit the input scaler (ideally, use the scaler from training)
     try:
         scaler_transformer = joblib.load("scaler_transformer.pkl")
         st.write("Loaded saved input scaler.")
     except Exception as e:
-        st.warning("Input scaler not found. Fitting scaler on current data (may differ from training).")
+        st.warning("Input scaler not found. Fitting scaler on live data (may differ from training).")
         from sklearn.preprocessing import StandardScaler
         scaler_transformer = StandardScaler()
-        scaler_transformer.fit(features_transformer)
+        scaler_transformer.fit(features_live)
     
-    # Transform the window data. Use df_window.values to preserve column order.
+    # Transform the window data (pass DataFrame values so feature names aren't needed)
     window_data_scaled = scaler_transformer.transform(df_window.values)
-    
-    # Add the batch dimension (expected shape: (1, window_size, num_features))
     window_data_scaled = window_data_scaled.reshape(1, window_size, len(cols))
     
-    # Make prediction using the Transformer model on the scaled data
+    # Make prediction using the Transformer model
     transformer_prediction = transformer_model.predict(window_data_scaled)
     raw_pred = transformer_prediction[0][0]
     
-    # --- Inverse Scaling (if available) ---
+    # Inverse transform if a target scaler is available
     try:
         target_scaler = joblib.load("scaler_target.pkl")
-        st.write("Loaded saved target scaler.")
-        # Inverse transform expects a 2D array, so we wrap raw_pred in [[...]]
         predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
+        st.write("Loaded saved target scaler.")
     except Exception as e:
         st.warning("Target scaler not found or error in inverse transforming. Using raw model output.")
         predicted_price_transformer = float(raw_pred)
     
-    # Get the current gold price (Yahoo 'Close' from the last row)
-    current_price_transformer = float(features_transformer[-1, 3])
+    # Get the current price from the live data (Yahoo 'Close' of the last day)
+    current_price_transformer = float(features_live[-1, 3])
     
-    st.subheader("📊 Transformer Model Prediction (Daily)")
-    st.write(f"📌 Current Gold Price (Yahoo): ${current_price_transformer:.2f}")
+    st.subheader("📊 Transformer Model Prediction (Daily Live Data)")
+    st.write(f"📌 Current Gold Price (Yahoo Live): ${current_price_transformer:.2f}")
     st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
 
 
