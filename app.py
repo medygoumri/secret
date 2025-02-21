@@ -46,10 +46,16 @@ if st.button("🔮 Predict Gold Price for Tomorrow"):
     # Define breakpoint price
     breakpoint_price = current_price * 1.01 if xgb_prediction[0] == 1 else current_price * 0.99
 
-    # Display predictions
-    st.write(f"📌 **Current Gold Price:** **${current_price:.2f}**")
-    st.write(f"📊 **Predicted Gold Price for Tomorrow:** **${predicted_price:.2f}**")
-    st.write(f"🔴 **Breakpoint Price:** **${breakpoint_price:.2f}**")
+  # Convert NumPy array to float
+current_price = float(current_price)  
+predicted_price = float(predicted_price)  
+breakpoint_price = float(breakpoint_price)  
+
+# Display predictions
+st.write(f"📌 **Current Gold Price:** **${current_price:.2f}**")
+st.write(f"📊 **Predicted Gold Price for Tomorrow:** **${predicted_price:.2f}**")
+st.write(f"🔴 **Breakpoint Price:** **${breakpoint_price:.2f}**")
+
 
     # Visualization
     fig, ax = plt.subplots(figsize=(8, 5))
