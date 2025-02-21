@@ -39,7 +39,6 @@ def fetch_gold_api_price() -> float:
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
-        # st.write("GoldAPI Response:", data)  # Uncomment for debugging
         return data.get("price")
     else:
         st.error("Error fetching data from GoldAPI")
@@ -103,7 +102,7 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
     )
 
     # Adjusted prices using the difference between Yahoo and GoldAPI prices
-    adjusted_current_price = current_price - diff      # This equals the GoldAPI price
+    adjusted_current_price = current_price - diff  # equals GoldAPI price
     adjusted_predicted_price = predicted_price - diff
     adjusted_breakpoint_price = breakpoint_price - diff
 
@@ -117,7 +116,7 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
         "adjusted_current_price": adjusted_current_price,
         "adjusted_predicted_price": adjusted_predicted_price,
         "adjusted_breakpoint_price": adjusted_breakpoint_price,
-        "diff": diff  # For debugging/reference
+        "diff": diff
     }
 
 def plot_price_movement(predictions: dict) -> go.Figure:
@@ -347,19 +346,21 @@ if st.button("🔮 Predict Tomorrow's Gold Price (Transformer Model)", key="pred
     
     # Make prediction using the Transformer model on the scaled live data
     transformer_prediction = transformer_model.predict(window_data_scaled)
-    raw_pred = transformer_prediction[0][0]
+    # Assume the model outputs 4 values: [predicted_open, predicted_high, predicted_low, predicted_close]
+    raw_pred = transformer_prediction[0]  # shape: (4,)
     
     try:
         target_scaler = joblib.load("scaler_target.pkl")
         st.write("Loaded saved target scaler.")
-        predicted_price_transformer = float(target_scaler.inverse_transform([[raw_pred]])[0][0])
+        predicted_prices = target_scaler.inverse_transform([raw_pred])[0]
     except Exception as e:
         st.warning("Target scaler not found or error in inverse transforming. Using raw model output.")
-        predicted_price_transformer = float(raw_pred)
+        predicted_prices = raw_pred
     
-    # Current live price from Yahoo Finance ('Close' of the last day)
+    predicted_open, predicted_high, predicted_low, predicted_close = predicted_prices
     current_price_transformer = float(features_transformer[-1, 3])
     
     st.subheader("📊 Transformer Model Prediction (Daily Live Data)")
     st.write(f"📌 Current Gold Price (Yahoo Live): ${current_price_transformer:.2f}")
-    st.write(f"🔮 Predicted Gold Price for Tomorrow (Transformer): ${predicted_price_transformer:.2f}")
+    st.write("🔮 Predicted Prices for Tomorrow (Transformer):")
+    st.write(f"**Open:** ${predicted_open:.2f}  |  **High:** ${predicted_high:.2f}  |  **Low:** ${predicted_low:.2f}  |  **Close:** ${predicted_close:.2f}")
