@@ -1,9 +1,9 @@
-
+import streamlit as st
 if __name__ == "__main__":
     st.set_page_config(page_title="Gold Price Prediction", layout="wide")
     st.experimental_rerun()  # Ensure the app reruns smoothly
 
-import streamlit as st
+
 import yfinance as yf
 import joblib
 import numpy as np
