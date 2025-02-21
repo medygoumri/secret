@@ -9,4 +9,5 @@ scikit-learn
 xgboost
 pandas
 requests
+plotly
 
