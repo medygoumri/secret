@@ -11,4 +11,6 @@ xgboost
 pandas
 requests
 plotly
+gym
+tf-agents
 
