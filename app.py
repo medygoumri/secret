@@ -8,7 +8,6 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 from textblob import TextBlob
-import ta  # Advanced technical indicators library
 
 # ----------------------------
 # Load Pre-trained Models & Scaler (for LSTM/XGBoost predictions)
@@ -18,59 +17,8 @@ xgb_model = joblib.load("xgb_gold_model.pkl")
 scaler = joblib.load("scaler.pkl")
 
 # ----------------------------
-# New Utility Functions for Improvements
+# Utility Functions
 # ----------------------------
-def weighted_ensemble_prediction(lstm_price: float, xgb_price: float, weight: float = 0.6) -> float:
-    """
-    Return a weighted average of the two predicted prices.
-    :param lstm_price: Predicted price from the LSTM model.
-    :param xgb_price: Predicted price from the XGBoost model.
-    :param weight: Weight for the LSTM prediction (default 0.6).
-    """
-    return weight * lstm_price + (1 - weight) * xgb_price
-
-def add_advanced_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculate advanced technical indicators (RSI, MACD, Bollinger Bands, ATR)
-    along with basic SMA and EMA.
-    """
-    df['SMA_10'] = df['Close'].rolling(window=10).mean()
-    df['EMA_10'] = df['Close'].ewm(span=10, adjust=False).mean()
-    # Use RSIIndicator with fillna=True to avoid dimension errors.
-    rsi_indicator = ta.momentum.RSIIndicator(close=df['Close'], window=14, fillna=True)
-    df['RSI'] = rsi_indicator.rsi()
-    # MACD difference with fillna=True
-    df['MACD'] = ta.trend.macd_diff(df['Close'], fillna=True)
-    # Bollinger Bands with fillna=True
-    bollinger = ta.volatility.BollingerBands(close=df['Close'], window=20, window_dev=2, fillna=True)
-    df['Bollinger_High'] = bollinger.bollinger_hband()
-    df['Bollinger_Low'] = bollinger.bollinger_lband()
-    # Average True Range with fillna=True
-    df['ATR'] = ta.volatility.average_true_range(high=df['High'], low=df['Low'], close=df['Close'], window=14, fillna=True)
-    df.dropna(inplace=True)
-    return df
-
-def fetch_economic_data() -> pd.DataFrame:
-    """
-    Dummy function to fetch external economic data.
-    Replace this with actual API calls or file reads.
-    """
-    date_range = pd.date_range(start="2023-01-01", end=datetime.datetime.today())
-    econ_data = pd.DataFrame({
-        'date': date_range,
-        'interest_rate': np.random.uniform(0, 5, size=len(date_range)),
-        'usd_index': np.random.uniform(90, 110, size=len(date_range))
-    }).set_index('date')
-    return econ_data
-
-def merge_economic_data(gold_df: pd.DataFrame, econ_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Merge economic data with gold price data.
-    """
-    merged = gold_df.merge(econ_df, left_index=True, right_index=True, how='left')
-    merged.fillna(method='ffill', inplace=True)
-    return merged
-
 @st.cache_data
 def fetch_gold_data(period: str, interval: str) -> pd.DataFrame:
     """Fetch gold price data from Yahoo Finance."""
@@ -97,9 +45,7 @@ def fetch_gold_api_price() -> float:
         return None
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculate basic technical indicators (SMA and EMA) for the model input.
-    """
+    """Calculate technical indicators (SMA and EMA) and add them to the DataFrame."""
     df['SMA_10'] = df['Close'].rolling(window=10).mean()
     df['EMA_10'] = df['Close'].ewm(span=10, adjust=False).mean()
     df.dropna(inplace=True)
@@ -108,7 +54,6 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
     """
     Predict tomorrow's gold price using the LSTM and XGBoost models.
-    Applies a weighted ensemble to combine the predictions.
     Also fetches the current gold price from GoldAPI to compute the difference.
     Returns a dictionary with various price metrics.
     """
@@ -142,21 +87,21 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
 
     # LSTM prediction
     lstm_prediction = lstm_model.predict(latest_features_lstm)
-    lstm_change = lstm_prediction[0][0] * (current_price * 0.02)
-    lstm_pred_price = current_price + lstm_change
 
-    # XGBoost prediction (using binary output: 1 for upward, 0 for downward)
-    xgb_prediction = xgb_model.predict(np.hstack((latest_features_scaled, lstm_prediction.reshape(1, -1))))
-    xgb_pred_price = current_price + (current_price * 0.02 if xgb_prediction[0] == 1 else -current_price * 0.02)
+    # Combine LSTM output with features for XGBoost
+    final_input = np.hstack((latest_features_scaled, lstm_prediction.reshape(1, -1)))
+    xgb_prediction = xgb_model.predict(final_input)
 
-    # Ensemble prediction using weighted average
-    ensemble_predicted_price = weighted_ensemble_prediction(lstm_pred_price, xgb_pred_price, weight=0.6)
-
-    # Breakpoint price (using original XGBoost logic)
-    breakpoint_price = float(current_price * 1.01 if xgb_prediction[0] == 1 else current_price * 0.99)
+    predicted_price_change = float(lstm_prediction[0][0] * (current_price * 0.02))
+    predicted_price = float(
+        current_price + (predicted_price_change if xgb_prediction[0] == 1 else -predicted_price_change)
+    )
+    breakpoint_price = float(
+        current_price * 1.01 if xgb_prediction[0] == 1 else current_price * 0.99
+    )
 
     adjusted_current_price = current_price - diff
-    adjusted_predicted_price = ensemble_predicted_price - diff
+    adjusted_predicted_price = predicted_price - diff
     adjusted_breakpoint_price = breakpoint_price - diff
 
     return {
@@ -164,7 +109,7 @@ def predict_tomorrow_price(gold_data: pd.DataFrame) -> dict:
         "latest_available_date": latest_available_date,
         "tomorrow_date": tomorrow_date,
         "current_price": current_price,
-        "predicted_price": ensemble_predicted_price,
+        "predicted_price": predicted_price,
         "breakpoint_price": breakpoint_price,
         "adjusted_current_price": adjusted_current_price,
         "adjusted_predicted_price": adjusted_predicted_price,
@@ -245,21 +190,14 @@ st.title("📈 Gold Price Prediction Dashboard")
 st.sidebar.title("Settings")
 historical_days = st.sidebar.slider("Select Historical Days for Data", min_value=7, max_value=90, value=30)
 
-# Fetch gold data
 with st.spinner("Fetching latest gold data for predictions..."):
     gold_data_prediction = fetch_gold_data(period="7d", interval="1d")
 with st.spinner("Fetching historical gold data..."):
     gold_data_history = fetch_gold_data(period=f"{historical_days}d", interval="1d")
-    # Use basic indicators for prediction
     gold_data_history_indicators = add_technical_indicators(gold_data_history.copy())
-    # Compute advanced indicators for visualization
-    gold_data_history_adv = add_advanced_indicators(gold_data_history.copy())
-    # Merge external economic data for additional context (optional)
-    econ_data = fetch_economic_data()
-    gold_data_enriched = merge_economic_data(gold_data_history_adv, econ_data)
 
 # ----------------------------
-# Main Prediction (LSTM/XGBoost) with Ensemble
+# Main Prediction (LSTM/XGBoost)
 # ----------------------------
 if st.button("🔮 Predict Tomorrow's Gold Price (LSTM/XGBoost)", key="predict_lstm"):
     predictions = predict_tomorrow_price(gold_data_prediction)
@@ -271,8 +209,8 @@ if st.button("🔮 Predict Tomorrow's Gold Price (LSTM/XGBoost)", key="predict_l
     col1, col2 = st.columns(2)
     with col1:
         st.metric(label="📌 Current Gold Price (Yahoo)", value=f"${predictions['current_price']:.2f}")
-        st.metric(label="📊 Predicted Price (Ensemble)", value=f"${predictions['predicted_price']:.2f}")
-        st.metric(label="🔴 Breakpoint Price (XGBoost)", value=f"${predictions['breakpoint_price']:.2f}")
+        st.metric(label="📊 Predicted Price (Yahoo)", value=f"${predictions['predicted_price']:.2f}")
+        st.metric(label="🔴 Breakpoint Price (Yahoo)", value=f"${predictions['breakpoint_price']:.2f}")
     with col2:
         st.metric(label="📌 Adjusted Current Price (GoldAPI)", value=f"${predictions['adjusted_current_price']:.2f}")
         st.metric(label="📊 Adjusted Predicted Price", value=f"${predictions['adjusted_predicted_price']:.2f}")
@@ -287,8 +225,6 @@ if st.button("🔮 Predict Tomorrow's Gold Price (LSTM/XGBoost)", key="predict_l
 st.subheader(f"📜 Historical Gold Prices (Last {historical_days} Days)")
 st.dataframe(gold_data_history[['Close']].tail(30))
 st.plotly_chart(plot_candlestick_chart(gold_data_history), use_container_width=True)
-st.subheader("📈 Advanced Indicators & Economic Data")
-st.dataframe(gold_data_enriched.tail(30))
 
 # ----------------------------
 # Gold Market News & Sentiment Analysis
