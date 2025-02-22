@@ -20,7 +20,6 @@ scaler = joblib.load("scaler.pkl")
 # ----------------------------
 # New Utility Functions for Improvements
 # ----------------------------
-
 def weighted_ensemble_prediction(lstm_price: float, xgb_price: float, weight: float = 0.6) -> float:
     """
     Return a weighted average of the two predicted prices.
@@ -37,12 +36,17 @@ def add_advanced_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     df['SMA_10'] = df['Close'].rolling(window=10).mean()
     df['EMA_10'] = df['Close'].ewm(span=10, adjust=False).mean()
-    df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
-    df['MACD'] = ta.trend.macd_diff(df['Close'])
-    bollinger = ta.volatility.BollingerBands(close=df['Close'], window=20, window_dev=2)
+    # Use RSIIndicator with fillna=True to avoid dimension errors.
+    rsi_indicator = ta.momentum.RSIIndicator(close=df['Close'], window=14, fillna=True)
+    df['RSI'] = rsi_indicator.rsi()
+    # MACD difference with fillna=True
+    df['MACD'] = ta.trend.macd_diff(df['Close'], fillna=True)
+    # Bollinger Bands with fillna=True
+    bollinger = ta.volatility.BollingerBands(close=df['Close'], window=20, window_dev=2, fillna=True)
     df['Bollinger_High'] = bollinger.bollinger_hband()
     df['Bollinger_Low'] = bollinger.bollinger_lband()
-    df['ATR'] = ta.volatility.average_true_range(df['High'], df['Low'], df['Close'], window=14)
+    # Average True Range with fillna=True
+    df['ATR'] = ta.volatility.average_true_range(high=df['High'], low=df['Low'], close=df['Close'], window=14, fillna=True)
     df.dropna(inplace=True)
     return df
 
@@ -92,7 +96,6 @@ def fetch_gold_api_price() -> float:
         st.error("Error fetching data from GoldAPI")
         return None
 
-# Keep the original basic indicators for prediction inputs
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate basic technical indicators (SMA and EMA) for the model input.
